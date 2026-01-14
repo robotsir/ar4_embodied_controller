@@ -39,7 +39,7 @@
 
 */
 
-
+// use this for the old AR3 encoders
 // VERSION LOG
 // 1.0 - 2/6/21 - initial release
 // 1.1 - 2/20/21 - bug fix, calibration offset on negative axis calibration direction axis 2,4,5
@@ -154,8 +154,8 @@ float J1StepDeg = 44.44444444;
 float J2StepDeg = 55.55555556;
 float J3StepDeg = 55.55555556;
 float J4StepDeg = 42.72664356;
-float J5StepDeg = 21.86024888;
-float J6StepDeg = 22.22222222;
+float J5StepDeg = 21.88888889;
+float J6StepDeg = 21.3368984;
 float J7StepDeg = 14.28571429;
 float J8StepDeg = 14.28571429;
 float J9StepDeg = 14.28571429;
