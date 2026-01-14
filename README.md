@@ -1,4 +1,4 @@
-# 🦾 AR4 Custom Controller for Embodied AI (UMI & Diffusion Policy)
+# 🦾 AR3 Custom Controller for Embodied AI (UMI & Diffusion Policy)
 
 [![Watch the Demo](https://img.youtube.com/vi/qmbZjXXNZu8/hqdefault.jpg)](https://youtu.be/qmbZjXXNZu8)
 
