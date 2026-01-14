@@ -1,3 +1,23 @@
+# 🦾 AR4 Custom Controller for Embodied AI (UMI & Diffusion Policy)
+
+[![Watch the Demo](https://img.youtube.com/vi/qmbZjXXNZu8/maxresdefault.jpg)](https://youtu.be/qmbZjXXNZu8)
+
+## ⚡ Project Overview
+This is a highly modified fork of the official AR4 software, engineered to bridge modern AI control policies with legacy robotic hardware. 
+
+**Key Engineering Contributions:**
+* **Firmware Porting:** Modified the Teensy firmware 3.0 to support the AR3 robot arm.
+* **UMI Integration:** Removed FK/IK calculation on Teensy to maximize serial communication speed up to 60Hz. The FK/IK is calculated on the PC side, so it's very easy to convert the EOAT pose to different format, such as UR (position + RotVec). The robot controller only accepts RJ (rotate joints) move command. 
+* **Soft E-Stop:** It allows the robot to stop while maintain joint position. It makes testing AI policies easier. 
+
+## ⚠️ Important Hardware Warning
+**Do not use this firmware on a standard AR3/4 build.** This code includes custom pin mappings for my specific "Retrofit" build. Flashing this to a stock AR3/4 controller may result in hardware conflicts.
+
+---
+# Original AR4 Software Documentation
+*(The text below is from the original repository by Annin Robotics)*
+
+
 # 🤖 AR4-MK3 Control Software  
 **Version 6.3.1 – January 2025**
 
