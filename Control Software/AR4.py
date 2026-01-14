@@ -49,6 +49,7 @@
   VERSION 2.0 10/1/22 added spline lookahead
   VERSION 2.2 11/6/22 added opencv integrated vision tab
   VERSION 3.0 2/3/23 move open loop bypass to teensy / add J8 & J9
+              12/31/25 remove FK/IK, use ikpy on host computer; flip J1 axis direction; soft e-stop added
 
 '''
 ##########################################################################
@@ -558,12 +559,10 @@ global autoBG
 autoBG = IntVar()
 
 
-
-
 global SplineTrue;
 SplineTrue = False;
 
-#define axis limits in degrees
+# define axis limits in degrees
 J1axisLimPos = 170;
 J1axisLimNeg = 170;
 J2axisLimPos = 90;
@@ -583,7 +582,7 @@ J8axisLimNeg = 0;
 J9axisLimPos = 340;
 J9axisLimNeg = 0;
 
-#define total axis travel
+# define total axis travel
 J1axisLim = J1axisLimPos + J1axisLimNeg;
 J2axisLim = J2axisLimPos + J2axisLimNeg;
 J3axisLim = J3axisLimPos + J3axisLimNeg;
@@ -621,7 +620,7 @@ tab7 = tkinter.ttk.Frame(nb)
 nb.add(tab7, text='   Info    ')
 
 tab10 = tkinter.ttk.Frame(nb)
-#nb.add(tab10, text='   Testing    ')
+# nb.add(tab10, text='   Testing    ')
 
 
 cam_on = False
@@ -731,7 +730,7 @@ def setCom2():
     tab6.ElogView.insert(END, Curtime+" - UNABLE TO ESTABLISH COMMUNICATIONS WITH ARDUINO IO BOARD")
     value=tab6.ElogView.get(0,END)
     pickle.dump(value,open("ErrorLog","wb"))
-    
+
 def darkTheme():
   global curTheme
   curTheme = 0
@@ -759,9 +758,9 @@ def lightTheme():
   style.configure('Frame1.TFrame', background='black')
 
 
-###############################################################################################################################################################  
-### EXECUTION DEFS ######################################################################################################################### EXECUTION DEFS ###  
-############################################################################################################################################################### 
+###############################################################################################################################################################
+### EXECUTION DEFS ######################################################################################################################### EXECUTION DEFS ###
+###############################################################################################################################################################
 
 def runProg():
   def threadProg():
@@ -787,7 +786,9 @@ def runProg():
         almStatusLab.config(text="PROGRAM RUNNING",  style="OK.TLabel")
         almStatusLab2.config(text="PROGRAM RUNNING",  style="OK.TLabel") 
       rowinproc = 1
+
       executeRow()
+
       while rowinproc == 1:
         time.sleep(.01)	  
       selRow = tab1.progView.curselection()[0]
@@ -814,11 +815,13 @@ def runProg():
         almStatusLab2.config(text="PROGRAM STOPPED",  style="Alarm.TLabel") 
   t = threading.Thread(target=threadProg)
   t.start()
-  
+
 def stepFwd():
     almStatusLab.config(text="SYSTEM READY",  style="OK.TLabel")
     almStatusLab2.config(text="SYSTEM READY",  style="OK.TLabel") 
-    executeRow() 
+  
+    executeRow()
+
     selRow = tab1.progView.curselection()[0]
     last = tab1.progView.index('end')
     for row in range (0,selRow):
@@ -836,11 +839,13 @@ def stepFwd():
     except:
       curRowEntryField.delete(0, 'end')
       curRowEntryField.insert(0,"---")
- 
+
 def stepRev():
     almStatusLab.config(text="SYSTEM READY",  style="OK.TLabel")
     almStatusLab2.config(text="SYSTEM READY",  style="OK.TLabel") 
-    executeRow()  
+
+    executeRow()
+
     selRow = tab1.progView.curselection()[0]
     last = tab1.progView.index('end')
     for row in range (0,selRow):
@@ -858,7 +863,7 @@ def stepRev():
     except:
       curRowEntryField.delete(0, 'end')
       curRowEntryField.insert(0,"---")  
-    
+
 def stopProg():
   global cmdType
   global splineActive
@@ -867,113 +872,113 @@ def stopProg():
   tab1.runTrue = 0
   almStatusLab.config(text="PROGRAM STOPPED",  style="Alarm.TLabel")
   almStatusLab2.config(text="PROGRAM STOPPED",  style="Alarm.TLabel")  
-  
-  
+
+
 def executeRow():
-  global J1AngCur
-  global J2AngCur
-  global J3AngCur
-  global J4AngCur
-  global J5AngCur
-  global J6AngCur
-  global calStat
-  global rowinproc
-  global LineDist
-  global Xv
-  global Yv
-  global Zv
-  global commandCalc
-  global moveInProc
-  global splineActive
-  global stopQueue
-  startTime = time.time()
-  selRow = tab1.progView.curselection()[0]
-  tab1.progView.see(selRow+2)
-  data = list(map(int, tab1.progView.curselection()))
-  command=tab1.progView.get(data[0])
-  cmdType=command[:6]
-  
-  ##Call Program##
-  if (cmdType == "Call P"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    tab1.lastRow = tab1.progView.curselection()[0]
-    tab1.lastProg = ProgEntryField.get()
-    programIndex = command.find("Program -")
-    progNum = str(command[programIndex+10:])
-    ProgEntryField.delete(0, 'end')
-    ProgEntryField.insert(0,progNum)
-    loadProg()
-    time.sleep(.4) 
-    index = 0
-    tab1.progView.selection_clear(0, END)
-    tab1.progView.select_set(index) 
-  ##Return Program##
-  if (cmdType == "Return"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    lastRow = tab1.lastRow
-    lastProg = tab1.lastProg
-    ProgEntryField.delete(0, 'end')
-    ProgEntryField.insert(0,lastProg)
-    loadProg()
-    time.sleep(.4) 
-    index = 0
-    tab1.progView.selection_clear(0, END)
-    tab1.progView.select_set(lastRow)  
-  ##Test Limit Switches
-  if (cmdType == "Test L"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    command = "TL\n" 
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.05)
-    response = str(ser.readline().strip(),'utf-8')
-    manEntryField.delete(0, 'end')
-    manEntryField.insert(0,response)
-  ##Set Encoders 1000
-  if (cmdType == "Set En"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    command = "SE\n" 
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.05)
-    time.sleep(.2)
-    ser.read() 
-  ##Read Encoders
-  if (cmdType == "Read E"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    command = "RE\n" 
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.05)
-    response = str(ser.readline().strip(),'utf-8')
-    manEntryField.delete(0, 'end')
-    manEntryField.insert(0,response)   
-  ##Servo Command##
-  if (cmdType == "Servo "):
-    if (moveInProc == 1):
-      moveInProc == 2
-    servoIndex = command.find("number ")
-    posIndex = command.find("position: ")
-    servoNum = str(command[servoIndex+7:posIndex-4])
-    servoPos = str(command[posIndex+10:])
-    command = "SV"+servoNum+"P"+servoPos+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser2.write(command.encode())
-    ser2.flushInput()
-    time.sleep(.2)
-    ser2.read() 
+    global J1AngCur
+    global J2AngCur
+    global J3AngCur
+    global J4AngCur
+    global J5AngCur
+    global J6AngCur
+    global calStat
+    global rowinproc
+    global LineDist
+    global Xv
+    global Yv
+    global Zv
+    global commandCalc
+    global moveInProc
+    global splineActive
+    global stopQueue
+    startTime = time.time()
+    selRow = tab1.progView.curselection()[0]
+    tab1.progView.see(selRow + 2)
+    data = list(map(int, tab1.progView.curselection()))
+    command = tab1.progView.get(data[0])
+    cmdType = command[:6]
+
+    ##Call Program##
+    if cmdType == "Call P":
+        if moveInProc == 1:
+            moveInProc == 2
+        tab1.lastRow = tab1.progView.curselection()[0]
+        tab1.lastProg = ProgEntryField.get()
+        programIndex = command.find("Program -")
+        progNum = str(command[programIndex + 10 :])
+        ProgEntryField.delete(0, "end")
+        ProgEntryField.insert(0, progNum)
+        loadProg()
+        time.sleep(0.4)
+        index = 0
+        tab1.progView.selection_clear(0, END)
+        tab1.progView.select_set(index)
+    ##Return Program##
+    if cmdType == "Return":
+        if moveInProc == 1:
+            moveInProc == 2
+        lastRow = tab1.lastRow
+        lastProg = tab1.lastProg
+        ProgEntryField.delete(0, "end")
+        ProgEntryField.insert(0, lastProg)
+        loadProg()
+        time.sleep(0.4)
+        index = 0
+        tab1.progView.selection_clear(0, END)
+        tab1.progView.select_set(lastRow)
+    ##Test Limit Switches
+    if cmdType == "Test L":
+        if moveInProc == 1:
+            moveInProc == 2
+        command = "TL\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.05)
+        response = str(ser.readline().strip(), "utf-8")
+        manEntryField.delete(0, "end")
+        manEntryField.insert(0, response)
+    ##Set Encoders 1000
+    if cmdType == "Set En":
+        if moveInProc == 1:
+            moveInProc == 2
+        command = "SE\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.05)
+        time.sleep(0.2)
+        ser.read()
+    ##Read Encoders
+    if cmdType == "Read E":
+        if moveInProc == 1:
+            moveInProc == 2
+        command = "RE\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.05)
+        response = str(ser.readline().strip(), "utf-8")
+        manEntryField.delete(0, "end")
+        manEntryField.insert(0, response)
+    ##Servo Command##
+    if cmdType == "Servo ":
+        if moveInProc == 1:
+            moveInProc == 2
+        servoIndex = command.find("number ")
+        posIndex = command.find("position: ")
+        servoNum = str(command[servoIndex + 7 : posIndex - 4])
+        servoPos = str(command[posIndex + 10 :])
+        command = "SV" + servoNum + "P" + servoPos + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser2.write(command.encode())
+        ser2.flushInput()
+        time.sleep(0.2)
+        ser2.read()
 
     ##Continuous Servo Command##
     if cmdType == "ServoC":
@@ -1048,88 +1053,87 @@ def executeRow():
         time.sleep(0.2)
         print(ser2.readline())
 
-  ##If Input On Jump to Tab IO Board##
-  if (cmdType == "If On "):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("Input-")
-    tabIndex = command.find("Tab-")
-    inputNum = str(command[inputIndex+6:tabIndex-9])
-    tabNum = str(command[tabIndex+4:])
-    command = "JFX"+inputNum+"T"+tabNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)   
-    ser2.write(command.encode())
-    ser2.flushInput()
-    time.sleep(.2)
-    response = str(ser2.readline().strip(),'utf-8')
-    if (response == "T"):
-      index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
-      index = index-1
-      tab1.progView.selection_clear(0, END)
-      tab1.progView.select_set(index)
-  ##If Input Off Jump to Tab IO Board##
-  if (cmdType == "If Off"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("Input-")
-    tabIndex = command.find("Tab-")
-    inputNum = str(command[inputIndex+6:tabIndex-9])
-    tabNum = str(command[tabIndex+4:])
-    command = "JFX"+inputNum+"T"+tabNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)   
-    ser2.write(command.encode())
-    ser2.flushInput()
-    time.sleep(.2)
-    response = str(ser2.readline().strip(),'utf-8')
-    if (response == "F"):
-      index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
-      index = index-1
-      tab1.progView.selection_clear(0, END)
-      tab1.progView.select_set(index)
+    ##If Input On Jump to Tab IO Board##
+    if cmdType == "If On ":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("Input-")
+        tabIndex = command.find("Tab-")
+        inputNum = str(command[inputIndex + 6 : tabIndex - 9])
+        tabNum = str(command[tabIndex + 4 :])
+        command = "JFX" + inputNum + "T" + tabNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser2.write(command.encode())
+        ser2.flushInput()
+        time.sleep(0.2)
+        response = str(ser2.readline().strip(), "utf-8")
+        if response == "T":
+            index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
+            index = index - 1
+            tab1.progView.selection_clear(0, END)
+            tab1.progView.select_set(index)
+    ##If Input Off Jump to Tab IO Board##
+    if cmdType == "If Off":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("Input-")
+        tabIndex = command.find("Tab-")
+        inputNum = str(command[inputIndex + 6 : tabIndex - 9])
+        tabNum = str(command[tabIndex + 4 :])
+        command = "JFX" + inputNum + "T" + tabNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser2.write(command.encode())
+        ser2.flushInput()
+        time.sleep(0.2)
+        response = str(ser2.readline().strip(), "utf-8")
+        if response == "F":
+            index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
+            index = index - 1
+            tab1.progView.selection_clear(0, END)
+            tab1.progView.select_set(index)
 
-
-  ##If Input On Jump to Tab Teensy##
-  if (cmdType == "TifOn "):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("Input-")
-    tabIndex = command.find("Tab-")
-    inputNum = str(command[inputIndex+6:tabIndex-9])
-    tabNum = str(command[tabIndex+4:])
-    command = "JFX"+inputNum+"T"+tabNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)   
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response == "T"):
-      index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
-      index = index-1
-      tab1.progView.selection_clear(0, END)
-      tab1.progView.select_set(index)
-  ##If Input Off Jump to Tab Teensy##
-  if (cmdType == "TifOff"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("Input-")
-    tabIndex = command.find("Tab-")
-    inputNum = str(command[inputIndex+6:tabIndex-9])
-    tabNum = str(command[tabIndex+4:])
-    command = "JFX"+inputNum+"T"+tabNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)   
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response == "F"):
-      index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
-      index = index-1
-      tab1.progView.selection_clear(0, END)
-      tab1.progView.select_set(index)
+    ##If Input On Jump to Tab Teensy##
+    if cmdType == "TifOn ":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("Input-")
+        tabIndex = command.find("Tab-")
+        inputNum = str(command[inputIndex + 6 : tabIndex - 9])
+        tabNum = str(command[tabIndex + 4 :])
+        command = "JFX" + inputNum + "T" + tabNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        response = str(ser.readline().strip(), "utf-8")
+        if response == "T":
+            index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
+            index = index - 1
+            tab1.progView.selection_clear(0, END)
+            tab1.progView.select_set(index)
+    ##If Input Off Jump to Tab Teensy##
+    if cmdType == "TifOff":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("Input-")
+        tabIndex = command.find("Tab-")
+        inputNum = str(command[inputIndex + 6 : tabIndex - 9])
+        tabNum = str(command[tabIndex + 4 :])
+        command = "JFX" + inputNum + "T" + tabNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        response = str(ser.readline().strip(), "utf-8")
+        if response == "F":
+            index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
+            index = index - 1
+            tab1.progView.selection_clear(0, END)
+            tab1.progView.select_set(index)
 
     ##Jump to Row##
     if cmdType == "Jump T":
@@ -1894,55 +1898,97 @@ def executeRow():
         else:
             displayPosition(response)
 
-  ##Move L Command##  
-  if (cmdType == "Move L"): 
-    if (moveInProc == 0):
-      moveInProc == 1
-    xIndex = command.find(" X ")
-    yIndex = command.find(" Y ")
-    zIndex = command.find(" Z ")
-    rzIndex = command.find(" Rz ")
-    ryIndex = command.find(" Ry ")
-    rxIndex = command.find(" Rx ")
-    J7Index = command.find(" J7 ")
-    J8Index = command.find(" J8 ")
-    J9Index = command.find(" J9 ")
-    SpeedIndex = command.find(" S")
-    ACCspdIndex = command.find(" Ac ")
-    DECspdIndex = command.find(" Dc ")
-    ACCrampIndex = command.find(" Rm ")
-    RoundingIndex = command.find(" Rnd ")
-    WristConfIndex = command.find(" $")
-    xVal = command[xIndex+3:yIndex]
-    yVal = command[yIndex+3:zIndex]
-    zVal = command[zIndex+3:rzIndex]
-    rzVal = command[rzIndex+4:ryIndex]
-    if (np.sign(float(rzVal)) != np.sign(float(RzcurPos))):
-      rzVal=str(float(rzVal)*-1)
-    ryVal = command[ryIndex+4:rxIndex]
-    rxVal = command[rxIndex+4:J7Index]
-    J7Val = command[J7Index+4:J8Index]
-    J8Val = command[J8Index+4:J9Index]
-    J9Val = command[J9Index+4:SpeedIndex]
-    speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-    Speed = command[SpeedIndex+4:ACCspdIndex]
-    ACCspd = command[ACCspdIndex+4:DECspdIndex]
-    DECspd = command[DECspdIndex+4:ACCrampIndex]
-    ACCramp = command[ACCrampIndex+4:RoundingIndex]
-    Rounding = command[RoundingIndex+5:WristConfIndex]
-    WC = command[WristConfIndex+3:]
-    LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-    command = "ML"+"X"+xVal+"Y"+yVal+"Z"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"J7"+J7Val+"J8"+J8Val+"J9"+J9Val+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"Rnd"+Rounding+"W"+WC+"Lm"+LoopMode+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response)
+    ##Move L Command##
+    if cmdType == "Move L":
+        if moveInProc == 0:
+            moveInProc == 1
+        xIndex = command.find(" X ")
+        yIndex = command.find(" Y ")
+        zIndex = command.find(" Z ")
+        rzIndex = command.find(" Rz ")
+        ryIndex = command.find(" Ry ")
+        rxIndex = command.find(" Rx ")
+        J7Index = command.find(" J7 ")
+        J8Index = command.find(" J8 ")
+        J9Index = command.find(" J9 ")
+        SpeedIndex = command.find(" S")
+        ACCspdIndex = command.find(" Ac ")
+        DECspdIndex = command.find(" Dc ")
+        ACCrampIndex = command.find(" Rm ")
+        RoundingIndex = command.find(" Rnd ")
+        WristConfIndex = command.find(" $")
+        xVal = command[xIndex + 3 : yIndex]
+        yVal = command[yIndex + 3 : zIndex]
+        zVal = command[zIndex + 3 : rzIndex]
+        rzVal = command[rzIndex + 4 : ryIndex]
+        if np.sign(float(rzVal)) != np.sign(float(RzcurPos)):
+            rzVal = str(float(rzVal) * -1)
+        ryVal = command[ryIndex + 4 : rxIndex]
+        rxVal = command[rxIndex + 4 : J7Index]
+        J7Val = command[J7Index + 4 : J8Index]
+        J8Val = command[J8Index + 4 : J9Index]
+        J9Val = command[J9Index + 4 : SpeedIndex]
+        speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+        Speed = command[SpeedIndex + 4 : ACCspdIndex]
+        ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+        DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+        ACCramp = command[ACCrampIndex + 4 : RoundingIndex]
+        Rounding = command[RoundingIndex + 5 : WristConfIndex]
+        WC = command[WristConfIndex + 3 :]
+        LoopMode = (
+            str(J1OpenLoopStat.get())
+            + str(J2OpenLoopStat.get())
+            + str(J3OpenLoopStat.get())
+            + str(J4OpenLoopStat.get())
+            + str(J5OpenLoopStat.get())
+            + str(J6OpenLoopStat.get())
+        )
+        command = (
+            "ML"
+            + "X"
+            + xVal
+            + "Y"
+            + yVal
+            + "Z"
+            + zVal
+            + "Rz"
+            + rzVal
+            + "Ry"
+            + ryVal
+            + "Rx"
+            + rxVal
+            + "J7"
+            + J7Val
+            + "J8"
+            + J8Val
+            + "J9"
+            + J9Val
+            + speedPrefix
+            + Speed
+            + "Ac"
+            + ACCspd
+            + "Dc"
+            + DECspd
+            + "Rm"
+            + ACCramp
+            + "Rnd"
+            + Rounding
+            + "W"
+            + WC
+            + "Lm"
+            + LoopMode
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        response = str(ser.readline().strip(), "utf-8")
+        if response[:1] == "E":
+            ErrorHandler(response)
+        else:
+            displayPosition(response)
 
     ##Move R Command##
     if cmdType == "Move R":
@@ -2732,14 +2778,22 @@ def J1jogNeg(value):
   command = "RJ"+"A"+str(float(J1AngCur)-value)+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response) 
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J1jogPos(value):
   global xboxUse
@@ -2777,14 +2831,22 @@ def J1jogPos(value):
   command = "RJ"+"A"+str(float(J1AngCur)+value)+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response) 
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J2jogNeg(value):
   global xboxUse
@@ -2822,14 +2884,22 @@ def J2jogNeg(value):
   command = "RJ"+"A"+J1AngCur+"B"+str(float(J2AngCur)-value)+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J2jogPos(value):
   global xboxUse
@@ -2867,14 +2937,22 @@ def J2jogPos(value):
   command = "RJ"+"A"+J1AngCur+"B"+str(float(J2AngCur)+value)+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J3jogNeg(value):
   global xboxUse
@@ -2912,14 +2990,22 @@ def J3jogNeg(value):
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+str(float(J3AngCur)-value)+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J3jogPos(value):
   global xboxUse
@@ -2957,14 +3043,22 @@ def J3jogPos(value):
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+str(float(J3AngCur)+value)+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J4jogNeg(value):
   global xboxUse
@@ -3002,15 +3096,23 @@ def J4jogNeg(value):
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+str(float(J4AngCur)-value)+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
-  ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
 
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
+    
 def J4jogPos(value):
   global xboxUse
   global J1AngCur
@@ -3047,14 +3149,22 @@ def J4jogPos(value):
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+str(float(J4AngCur)+value)+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)  
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J5jogNeg(value):
   global xboxUse
@@ -3092,14 +3202,22 @@ def J5jogNeg(value):
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+str(float(J5AngCur)-value)+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
+
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J5jogPos(value):
   global xboxUse
@@ -3135,16 +3253,24 @@ def J5jogPos(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+str(float(J5AngCur)+value)+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)  
+
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J6jogNeg(value):
   global xboxUse
@@ -3180,16 +3306,24 @@ def J6jogNeg(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+str(float(J6AngCur)-value)+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
+
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J6jogPos(value):
   global xboxUse
@@ -3225,18 +3359,24 @@ def J6jogPos(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+str(float(J6AngCur)+value)+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response) 
 
-
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 
 def J7jogNeg(value):
@@ -3273,16 +3413,25 @@ def J7jogNeg(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(float(J7PosCur)-value)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
+
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
+
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J7jogPos(value):
   global xboxUse
@@ -3318,18 +3467,24 @@ def J7jogPos(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(float(J7PosCur)+value)+"J8"+str(J8PosCur)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response) 
 
-
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 def J8jogNeg(value):
   global xboxUse
@@ -3365,17 +3520,24 @@ def J8jogNeg(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(float(J8PosCur)-value)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
 
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 
 def J8jogPos(value):
@@ -3412,16 +3574,24 @@ def J8jogPos(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(float(J8PosCur)+value)+"J9"+str(J9PosCur)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)  
+
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 
 def J9jogNeg(value):
@@ -3458,17 +3628,24 @@ def J9jogNeg(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(float(J9PosCur)-value)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)
 
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return
 
 
 def J9jogPos(value):
@@ -3505,18 +3682,24 @@ def J9jogPos(value):
   ACCramp = ACCrampField.get()
   LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
   command = "RJ"+"A"+J1AngCur+"B"+J2AngCur+"C"+J3AngCur+"D"+J4AngCur+"E"+J5AngCur+"F"+J6AngCur+"J7"+str(J7PosCur)+"J8"+str(J8PosCur)+"J9"+str(float(J9PosCur)+value)+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-  ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'E'):
-    ErrorHandler(response)    
-  else:
-    displayPosition(response)        
 
-
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  deadline = time.time() + 20.0
+  required_joints = ["B", "C", "D", "E", "F"]
+  
+  while time.time() < deadline:
+    line = ser.readline().decode("utf-8").strip()
+    if not line:
+      continue
+    if line.startswith('E'):
+      ErrorHandler(line)
+      return
+    if line.startswith("A") and all(char in line for char in required_joints):
+      displayPosition(line)
+      return   
 
 
 def LiveJointJog(value):
@@ -3615,6 +3798,8 @@ def LiveToolJog(value):
   ser.read()  
 
 
+"""Stop Jogging Function, sends stop command to controller, but controller doesn't have
+the corresponding function, it simply ignores it"""
 def StopJog(self):
   command = "S\n"
   IncJogStatVal = int(IncJogStat.get())
@@ -6159,10 +6344,11 @@ def CalZeroPos():
 def CalRestPos():
   Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
   command = "SPA0B0C-89D0E0F0\n"
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = ser.read()
+  # ser.flushInput()
+  # time.sleep(.2)
+  # response = ser.read()
   requestPos()
   almStatusLab.config(text="Calibration Forced to Vertical Rest Pos", style="Warn.TLabel")
   almStatusLab2.config(text="Calibration Forced to Vertical Rest Pos", style="Warn.TLabel")
@@ -6171,6 +6357,37 @@ def CalRestPos():
   value=tab6.ElogView.get(0,END)
   pickle.dump(value,open("ErrorLog","wb"))  
 
+def CalRestAngledGripperPos():
+  Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
+  command = "SPA0B0C-89D0E40F0\n"
+  ser.reset_input_buffer()
+  ser.write(command.encode())    
+  # ser.flushInput()
+  # time.sleep(.2)
+  # response = ser.read()
+  requestPos()
+  almStatusLab.config(text="Calibration Forced to Vertical Rest Pos for angled gripper", style="Warn.TLabel")
+  almStatusLab2.config(text="Calibration Forced to Vertical Rest Pos for angled gripper", style="Warn.TLabel")
+  message = "Calibration Forced to UMI gripper rest - this is for UMI testing - be careful!"
+  tab6.ElogView.insert(END, Curtime+" - "+message)
+  value=tab6.ElogView.get(0,END)
+  pickle.dump(value,open("ErrorLog","wb"))  
+
+def CalHomeAngledGripperPos():
+  Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
+  command = "SPA0B0C0D0E90F0\n"
+  ser.reset_input_buffer()
+  ser.write(command.encode())
+  # ser.flushInput()
+  # time.sleep(.2)
+  # response = ser.read()
+  requestPos()
+  almStatusLab.config(text="Calibration Forced to Home for the angled gripper", style="Warn.TLabel")
+  almStatusLab2.config(text="Calibration Forced to Home for the angled gripper", style="Warn.TLabel")
+  message = "Calibration Forced to UMI gripper home - this is for UMI testing - be careful!"
+  tab6.ElogView.insert(END, Curtime+" - "+message)
+  value=tab6.ElogView.get(0,END)
+  pickle.dump(value,open("ErrorLog","wb"))  
 
 def ResetDrives():
   ResetDriveBut = Button(tab1,  text="Reset Drives",   command = ResetDrives)
@@ -6212,12 +6429,12 @@ def displayPosition(response):
   J4AngIndex = response.find('D');
   J5AngIndex = response.find('E');
   J6AngIndex = response.find('F');
-  XposIndex = response.find('G');
-  YposIndex = response.find('H');
-  ZposIndex = response.find('I');
-  RzposIndex = response.find('J');
-  RyposIndex = response.find('K');
-  RxposIndex = response.find('L');
+  # XposIndex = response.find('G');
+  # YposIndex = response.find('H');
+  # ZposIndex = response.find('I');
+  # RzposIndex = response.find('J');
+  # RyposIndex = response.find('K');
+  # RxposIndex = response.find('L');
   SpeedVioIndex = response.find('M');
   DebugIndex = response.find('N');
   FlagIndex = response.find('O');
@@ -6229,18 +6446,18 @@ def displayPosition(response):
   J3AngCur = response[J3AngIndex+1:J4AngIndex].strip();
   J4AngCur = response[J4AngIndex+1:J5AngIndex].strip();
   J5AngCur = response[J5AngIndex+1:J6AngIndex].strip();
-  J6AngCur = response[J6AngIndex+1:XposIndex].strip();
+  J6AngCur = response[J6AngIndex+1:SpeedVioIndex].strip();
 
   if (float(J5AngCur) > 0):
     WC = "F"
   else:
     WC = "N"
-  XcurPos = response[XposIndex+1:YposIndex].strip();
-  YcurPos = response[YposIndex+1:ZposIndex].strip();
-  ZcurPos = response[ZposIndex+1:RzposIndex].strip();
-  RzcurPos = response[RzposIndex+1:RyposIndex].strip();
-  RycurPos = response[RyposIndex+1:RxposIndex].strip();
-  RxcurPos = response[RxposIndex+1:SpeedVioIndex].strip();
+  # XcurPos = response[XposIndex+1:YposIndex].strip();
+  # YcurPos = response[YposIndex+1:ZposIndex].strip();
+  # ZcurPos = response[ZposIndex+1:RzposIndex].strip();
+  # RzcurPos = response[RzposIndex+1:RyposIndex].strip();
+  # RycurPos = response[RyposIndex+1:RxposIndex].strip();
+  # RxcurPos = response[RxposIndex+1:SpeedVioIndex].strip();
   SpeedVioation = response[SpeedVioIndex+1:DebugIndex].strip();
   Debug = response[DebugIndex+1:FlagIndex].strip();
   Flag = response[FlagIndex+1:J7PosIndex].strip();
@@ -6260,18 +6477,18 @@ def displayPosition(response):
   J5curAngEntryField.insert(0,J5AngCur)
   J6curAngEntryField.delete(0, 'end')
   J6curAngEntryField.insert(0,J6AngCur)
-  XcurEntryField.delete(0, 'end')
-  XcurEntryField.insert(0,XcurPos)
-  YcurEntryField.delete(0, 'end')
-  YcurEntryField.insert(0,YcurPos)
-  ZcurEntryField.delete(0, 'end')
-  ZcurEntryField.insert(0,ZcurPos)
-  RzcurEntryField.delete(0, 'end')
-  RzcurEntryField.insert(0,RzcurPos)
-  RycurEntryField.delete(0, 'end')
-  RycurEntryField.insert(0,RycurPos)
-  RxcurEntryField.delete(0, 'end')
-  RxcurEntryField.insert(0,RxcurPos)
+  # XcurEntryField.delete(0, 'end')
+  # XcurEntryField.insert(0,XcurPos)
+  # YcurEntryField.delete(0, 'end')
+  # YcurEntryField.insert(0,YcurPos)
+  # ZcurEntryField.delete(0, 'end')
+  # ZcurEntryField.insert(0,ZcurPos)
+  # RzcurEntryField.delete(0, 'end')
+  # RzcurEntryField.insert(0,RzcurPos)
+  # RycurEntryField.delete(0, 'end')
+  # RycurEntryField.insert(0,RycurPos)
+  # RxcurEntryField.delete(0, 'end')
+  # RxcurEntryField.insert(0,RxcurPos)
   J7curAngEntryField.delete(0, 'end')
   J7curAngEntryField.insert(0,J7PosCur)
   J8curAngEntryField.delete(0, 'end')
@@ -7228,7 +7445,6 @@ def mouse_crop(event, x, y, flags, param):
             updateVisOp()  
 
 
-
 def selectTemplate():
   global oriImage
   global button_down
@@ -7240,8 +7456,6 @@ def selectTemplate():
   cv2.namedWindow("image")
   cv2.setMouseCallback("image", mouse_crop)
   cv2.imshow("image", image)
-
-
 
 
 def snapFind():
@@ -7260,8 +7474,6 @@ def snapFind():
   else:  
     background = eval(VisBacColorEntryField.get())
   visFind(template,min_score,background)
-
-
 
 
 def rotate_image(img,angle,background):
@@ -7483,14 +7695,10 @@ def visFind(template,min_score,background):
       VisRetYpixEntryField.insert(0,"NA") 
 
     return (status)    
-    
-
-
-
 
 
 # initial vis attempt using sift with flann pattern match
-#def visFind(template):
+# def visFind(template):
 #  take_pic()
 #  MIN_MATCH_COUNT = 10
 #  img1 = cv2.imread(template)  # query Image
@@ -7563,26 +7771,23 @@ def visFind(template,min_score,background):
 #      img2 = cv2.circle(img2, (int(xPos),int(yPos)), radius=30, color=(0, 255, 0), thickness=3)
 #
 #      #draw line 1
-#      cv2.line(img2, (x1Pos,y1Pos), (x2Pos,y2Pos), (0,255,0), 3) 
+#      cv2.line(img2, (x1Pos,y1Pos), (x2Pos,y2Pos), (0,255,0), 3)
 #      #draw line 2
 #      cv2.line(img2, (x3Pos,y3Pos), (x4Pos,y4Pos), (0,255,0), 3)
 #
 #      #save image
 #      cv2.imwrite('curImage.jpg', img2)
 #      img = Image.fromarray(img2)
-#      imgtk = ImageTk.PhotoImage(image=img)        
-#      vid_lbl.imgtk = imgtk    
-#      vid_lbl.configure(image=imgtk) 
+#      imgtk = ImageTk.PhotoImage(image=img)
+#      vid_lbl.imgtk = imgtk
+#      vid_lbl.configure(image=imgtk)
 #
 #
 #
 #
 #  else:
 #      print( "Not enough matches are found - {}/{}".format(len(good), MIN_MATCH_COUNT) )
-#      matchesMask = None 
-
-
-
+#      matchesMask = None
 
 
 def updateVisOp():
@@ -7635,9 +7840,7 @@ def zeroBrCn():
 def VisUpdateBriCon(foo):
   take_pic()  
 
-  
-  
-       
+
 def motion(event):
     y = event.x
     x = event.y
@@ -7741,7 +7944,6 @@ rLab = Label(CartjogFrame, font=("Arial", 18), text = "Rx")
 rLab.place(x=1110, y=162)
 
 
-
 TXLab = Label(CartjogFrame, font=("Arial", 18), text = "Tx")
 TXLab.place(x=660, y=265)
 
@@ -7761,24 +7963,10 @@ J7Lab = Label(CartjogFrame, font=("Arial", 18), text = "Trx")
 J7Lab.place(x=1110, y=265)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ### JOINT CONTROL ################################################################
 ##########################################################################
 ##J1
-J1jogFrame = Frame(tab1, width=340, height=40,)
+J1jogFrame = Frame(tab1, width=S(340), height=S(40))
 J1jogFrame.place(x=810, y=10)
 J1Lab = Label(J1jogFrame, font=("Arial", 18), text = "J1")
 J1Lab.place(x=5, y=5)
@@ -7804,9 +7992,9 @@ J1jogPosBut = Button(J1jogFrame, text="+",  width=3)
 J1jogPosBut.bind("<ButtonPress>", SelJ1jogPos)
 J1jogPosBut.bind("<ButtonRelease>", StopJog)
 J1jogPosBut.place(x=300, y=7, width=30, height=25)
-J1negLimLab = Label(J1jogFrame, font=("Arial", 8), text = str(-J1axisLimNeg), style="Jointlim.TLabel")
+J1negLimLab = Label(J1jogFrame, font=("Arial", FS(8)), text = str(-J1axisLimNeg), style="Jointlim.TLabel")
 J1negLimLab.place(x=115, y=25)
-J1posLimLab = Label(J1jogFrame, font=("Arial", 8), text = str(J1axisLimPos), style="Jointlim.TLabel")
+J1posLimLab = Label(J1jogFrame, font=("Arial", FS(8)), text = str(J1axisLimPos), style="Jointlim.TLabel")
 J1posLimLab.place(x=270, y=25)
 J1slidelabel = Label(J1jogFrame)
 J1slidelabel.place(x=190, y=25)
@@ -7818,12 +8006,12 @@ def J1sliderExecute(foo):
     J1jogNeg(abs(J1delta))
   else:
     J1jogPos(abs(J1delta))       
-J1jogslide = Scale(J1jogFrame, from_=-J1axisLimNeg, to=J1axisLimPos,  length=180, orient=HORIZONTAL,  command=J1sliderUpdate)
+J1jogslide = Scale(J1jogFrame, from_=-J1axisLimNeg, to=J1axisLimPos,  length=S(180), orient=HORIZONTAL,  command=J1sliderUpdate)
 J1jogslide.bind("<ButtonRelease-1>", J1sliderExecute)
 J1jogslide.place(x=115, y=7)
 
 ##J2
-J2jogFrame = Frame(tab1, width=340, height=40,)
+J2jogFrame = Frame(tab1, width=S(340), height=S(40))
 J2jogFrame.place(x=810, y=55)
 J2Lab = Label(J2jogFrame, font=("Arial", 18), text = "J2")
 J2Lab.place(x=5, y=5)
@@ -7849,9 +8037,9 @@ J2jogPosBut = Button(J2jogFrame, text="+",  width=3)
 J2jogPosBut.bind("<ButtonPress>", SelJ2jogPos)
 J2jogPosBut.bind("<ButtonRelease>", StopJog)
 J2jogPosBut.place(x=300, y=7, width=30, height=25)
-J2negLimLab = Label(J2jogFrame, font=("Arial", 8), text = str(-J2axisLimNeg), style="Jointlim.TLabel")
+J2negLimLab = Label(J2jogFrame, font=("Arial", FS(8)), text = str(-J2axisLimNeg), style="Jointlim.TLabel")
 J2negLimLab.place(x=115, y=25)
-J2posLimLab = Label(J2jogFrame, font=("Arial", 8), text = str(J2axisLimPos), style="Jointlim.TLabel")
+J2posLimLab = Label(J2jogFrame, font=("Arial", FS(8)), text = str(J2axisLimPos), style="Jointlim.TLabel")
 J2posLimLab.place(x=270, y=25)
 J2slidelabel = Label(J2jogFrame)
 J2slidelabel.place(x=190, y=25)
@@ -7863,12 +8051,12 @@ def J2sliderExecute(foo):
     J2jogNeg(abs(J2delta))
   else:
     J2jogPos(abs(J2delta))       
-J2jogslide = Scale(J2jogFrame, from_=-J2axisLimNeg, to=J2axisLimPos,  length=180, orient=HORIZONTAL,  command=J2sliderUpdate)
+J2jogslide = Scale(J2jogFrame, from_=-J2axisLimNeg, to=J2axisLimPos,  length=S(180), orient=HORIZONTAL,  command=J2sliderUpdate)
 J2jogslide.bind("<ButtonRelease-1>", J2sliderExecute)
 J2jogslide.place(x=115, y=7)
 
 ##J3
-J3jogFrame = Frame(tab1, width=340, height=40,)
+J3jogFrame = Frame(tab1, width=S(340), height=S(40))
 J3jogFrame.place(x=810, y=100)
 J3Lab = Label(J3jogFrame, font=("Arial", 18), text = "J3")
 J3Lab.place(x=5, y=5)
@@ -7894,9 +8082,9 @@ J3jogPosBut = Button(J3jogFrame, text="+",  width=3)
 J3jogPosBut.bind("<ButtonPress>", SelJ3jogPos)
 J3jogPosBut.bind("<ButtonRelease>", StopJog)
 J3jogPosBut.place(x=300, y=7, width=30, height=25)
-J3negLimLab = Label(J3jogFrame, font=("Arial", 8), text = str(-J3axisLimNeg), style="Jointlim.TLabel")
+J3negLimLab = Label(J3jogFrame, font=("Arial", FS(8)), text = str(-J3axisLimNeg), style="Jointlim.TLabel")
 J3negLimLab.place(x=115, y=25)
-J3posLimLab = Label(J3jogFrame, font=("Arial", 8), text = str(J3axisLimPos), style="Jointlim.TLabel")
+J3posLimLab = Label(J3jogFrame, font=("Arial", FS(8)), text = str(J3axisLimPos), style="Jointlim.TLabel")
 J3posLimLab.place(x=270, y=25)
 J3slidelabel = Label(J3jogFrame)
 J3slidelabel.place(x=190, y=25)
@@ -7908,12 +8096,12 @@ def J3sliderExecute(foo):
     J3jogNeg(abs(J3delta))
   else:
     J3jogPos(abs(J3delta))       
-J3jogslide = Scale(J3jogFrame, from_=-J3axisLimNeg, to=J3axisLimPos,  length=180, orient=HORIZONTAL,  command=J3sliderUpdate)
+J3jogslide = Scale(J3jogFrame, from_=-J3axisLimNeg, to=J3axisLimPos,  length=S(180), orient=HORIZONTAL,  command=J3sliderUpdate)
 J3jogslide.bind("<ButtonRelease-1>", J3sliderExecute)
 J3jogslide.place(x=115, y=7)
 
 ##J4
-J4jogFrame = Frame(tab1, width=340, height=40,)
+J4jogFrame = Frame(tab1, width=S(340), height=S(40))
 J4jogFrame.place(x=1160, y=10)
 J4Lab = Label(J4jogFrame, font=("Arial", 18), text = "J4")
 J4Lab.place(x=5, y=5)
@@ -7939,9 +8127,9 @@ J4jogPosBut = Button(J4jogFrame, text="+",  width=3)
 J4jogPosBut.bind("<ButtonPress>", SelJ4jogPos)
 J4jogPosBut.bind("<ButtonRelease>", StopJog)
 J4jogPosBut.place(x=300, y=7, width=30, height=25)
-J4negLimLab = Label(J4jogFrame, font=("Arial", 8), text = str(-J4axisLimNeg), style="Jointlim.TLabel")
+J4negLimLab = Label(J4jogFrame, font=("Arial", FS(8)), text = str(-J4axisLimNeg), style="Jointlim.TLabel")
 J4negLimLab.place(x=115, y=25)
-J4posLimLab = Label(J4jogFrame, font=("Arial", 8), text = str(J4axisLimPos), style="Jointlim.TLabel")
+J4posLimLab = Label(J4jogFrame, font=("Arial", FS(8)), text = str(J4axisLimPos), style="Jointlim.TLabel")
 J4posLimLab.place(x=270, y=25)
 J4slidelabel = Label(J4jogFrame)
 J4slidelabel.place(x=190, y=25)
@@ -7953,12 +8141,12 @@ def J4sliderExecute(foo):
     J4jogNeg(abs(J4delta))
   else:
     J4jogPos(abs(J4delta))       
-J4jogslide = Scale(J4jogFrame, from_=-J4axisLimNeg, to=J4axisLimPos,  length=180, orient=HORIZONTAL,  command=J4sliderUpdate)
+J4jogslide = Scale(J4jogFrame, from_=-J4axisLimNeg, to=J4axisLimPos,  length=S(180), orient=HORIZONTAL,  command=J4sliderUpdate)
 J4jogslide.bind("<ButtonRelease-1>", J4sliderExecute)
 J4jogslide.place(x=115, y=7)
 
 ##J5
-J5jogFrame = Frame(tab1, width=340, height=40,)
+J5jogFrame = Frame(tab1, width=S(340), height=S(40))
 J5jogFrame.place(x=1160, y=55)
 J5Lab = Label(J5jogFrame, font=("Arial", 18), text = "J5")
 J5Lab.place(x=5, y=5)
@@ -7984,9 +8172,9 @@ J5jogPosBut = Button(J5jogFrame, text="+",  width=3)
 J5jogPosBut.bind("<ButtonPress>", SelJ5jogPos)
 J5jogPosBut.bind("<ButtonRelease>", StopJog)
 J5jogPosBut.place(x=300, y=7, width=30, height=25)
-J5negLimLab = Label(J5jogFrame, font=("Arial", 8), text = str(-J5axisLimNeg), style="Jointlim.TLabel")
+J5negLimLab = Label(J5jogFrame, font=("Arial", FS(8)), text = str(-J5axisLimNeg), style="Jointlim.TLabel")
 J5negLimLab.place(x=115, y=25)
-J5posLimLab = Label(J5jogFrame, font=("Arial", 8), text = str(J5axisLimPos), style="Jointlim.TLabel")
+J5posLimLab = Label(J5jogFrame, font=("Arial", FS(8)), text = str(J5axisLimPos), style="Jointlim.TLabel")
 J5posLimLab.place(x=270, y=25)
 J5slidelabel = Label(J5jogFrame)
 J5slidelabel.place(x=190, y=25)
@@ -7998,12 +8186,12 @@ def J5sliderExecute(foo):
     J5jogNeg(abs(J5delta))
   else:
     J5jogPos(abs(J5delta))       
-J5jogslide = Scale(J5jogFrame, from_=-J5axisLimNeg, to=J5axisLimPos,  length=180, orient=HORIZONTAL,  command=J5sliderUpdate)
+J5jogslide = Scale(J5jogFrame, from_=-J5axisLimNeg, to=J5axisLimPos,  length=S(180), orient=HORIZONTAL,  command=J5sliderUpdate)
 J5jogslide.bind("<ButtonRelease-1>", J5sliderExecute)
 J5jogslide.place(x=115, y=7)
 
 ##J6
-J6jogFrame = Frame(tab1, width=340, height=40,)
+J6jogFrame = Frame(tab1, width=S(340), height=S(40))
 J6jogFrame.place(x=1160, y=100)
 J6Lab = Label(J6jogFrame, font=("Arial", 18), text = "J6")
 J6Lab.place(x=5, y=5)
@@ -8029,9 +8217,9 @@ J6jogPosBut = Button(J6jogFrame, text="+",  width=3)
 J6jogPosBut.bind("<ButtonPress>", SelJ6jogPos)
 J6jogPosBut.bind("<ButtonRelease>", StopJog)
 J6jogPosBut.place(x=300, y=7, width=30, height=25)
-J6negLimLab = Label(J6jogFrame, font=("Arial", 8), text = str(-J6axisLimNeg), style="Jointlim.TLabel")
+J6negLimLab = Label(J6jogFrame, font=("Arial", FS(8)), text = str(-J6axisLimNeg), style="Jointlim.TLabel")
 J6negLimLab.place(x=115, y=25)
-J6posLimLab = Label(J6jogFrame, font=("Arial", 8), text = str(J6axisLimPos), style="Jointlim.TLabel")
+J6posLimLab = Label(J6jogFrame, font=("Arial", FS(8)), text = str(J6axisLimPos), style="Jointlim.TLabel")
 J6posLimLab.place(x=270, y=25)
 J6slidelabel = Label(J6jogFrame)
 J6slidelabel.place(x=190, y=25)
@@ -8043,18 +8231,15 @@ def J6sliderExecute(foo):
     J6jogNeg(abs(J6delta))
   else:
     J6jogPos(abs(J6delta))       
-J6jogslide = Scale(J6jogFrame, from_=-J6axisLimNeg, to=J6axisLimPos,  length=180, orient=HORIZONTAL,  command=J6sliderUpdate)
+J6jogslide = Scale(J6jogFrame, from_=-J6axisLimNeg, to=J6axisLimPos,  length=S(180), orient=HORIZONTAL,  command=J6sliderUpdate)
 J6jogslide.bind("<ButtonRelease-1>", J6sliderExecute)
 J6jogslide.place(x=115, y=7)
 
 
-
-
-
-J7jogFrame = Frame(tab1, width=145, height=100)
+J7jogFrame = Frame(tab1, width=S(145), height=S(100))
 J7jogFrame['relief'] = 'raised'
 J7jogFrame.place(x=1340, y=350)
-J7Lab = Label(J7jogFrame, font=("Arial", 14), text = "7th Axis")
+J7Lab = Label(J7jogFrame, font=("Arial", FS(14)), text = "7th Axis")
 J7Lab.place(x=15, y=5)
 J7curAngEntryField = Entry(J7jogFrame,width=5)
 J7curAngEntryField.place(x=95, y=9)
@@ -8078,9 +8263,9 @@ J7jogPosBut = Button(J7jogFrame, text="+",  width=3)
 J7jogPosBut.bind("<ButtonPress>", SelJ7jogPos)
 J7jogPosBut.bind("<ButtonRelease>", StopJog)
 J7jogPosBut.place(x=105, y=65, width=30, height=25)
-J7negLimLab = Label(J7jogFrame, font=("Arial", 8), text = str(-J7axisLimNeg), style="Jointlim.TLabel")
+J7negLimLab = Label(J7jogFrame, font=("Arial", FS(8)), text = str(-J7axisLimNeg), style="Jointlim.TLabel")
 J7negLimLab.place(x=10, y=30)
-J7posLimLab = Label(J7jogFrame, font=("Arial", 8), text = str(J7axisLimPos), style="Jointlim.TLabel")
+J7posLimLab = Label(J7jogFrame, font=("Arial", FS(8)), text = str(J7axisLimPos), style="Jointlim.TLabel")
 J7posLimLab.place(x=110, y=30)
 J7slideLimLab = Label(J7jogFrame)
 J7slideLimLab.place(x=60, y=70)
@@ -8097,10 +8282,10 @@ J7jogslide.bind("<ButtonRelease-1>", J7sliderExecute)
 J7jogslide.place(x=10, y=43)
 
 
-J8jogFrame = Frame(tab1, width=145, height=100)
+J8jogFrame = Frame(tab1, width=S(145), height=S(100))
 J8jogFrame['relief'] = 'raised'
 J8jogFrame.place(x=1340, y=460)
-J8Lab = Label(J8jogFrame, font=("Arial", 14), text = "8th Axis")
+J8Lab = Label(J8jogFrame, font=("Arial", FS(14)), text = "8th Axis")
 J8Lab.place(x=15, y=5)
 J8curAngEntryField = Entry(J8jogFrame,width=5)
 J8curAngEntryField.place(x=95, y=9)
@@ -8124,9 +8309,9 @@ J8jogPosBut = Button(J8jogFrame, text="+",  width=3)
 J8jogPosBut.bind("<ButtonPress>", SelJ8jogPos)
 J8jogPosBut.bind("<ButtonRelease>", StopJog)
 J8jogPosBut.place(x=105, y=65, width=30, height=25)
-J8negLimLab = Label(J8jogFrame, font=("Arial", 8), text = str(-J8axisLimNeg), style="Jointlim.TLabel")
+J8negLimLab = Label(J8jogFrame, font=("Arial", FS(8)), text = str(-J8axisLimNeg), style="Jointlim.TLabel")
 J8negLimLab.place(x=10, y=30)
-J8posLimLab = Label(J8jogFrame, font=("Arial", 8), text = str(J8axisLimPos), style="Jointlim.TLabel")
+J8posLimLab = Label(J8jogFrame, font=("Arial", FS(8)), text = str(J8axisLimPos), style="Jointlim.TLabel")
 J8posLimLab.place(x=110, y=30)
 J8slideLimLab = Label(J8jogFrame)
 J8slideLimLab.place(x=60, y=70)
@@ -8143,10 +8328,10 @@ J8jogslide.bind("<ButtonRelease-1>", J8sliderExecute)
 J8jogslide.place(x=10, y=43)
 
 
-J9jogFrame = Frame(tab1, width=145, height=100)
+J9jogFrame = Frame(tab1, width=S(145), height=S(100))
 J9jogFrame['relief'] = 'raised'
 J9jogFrame.place(x=1340, y=570)
-J9Lab = Label(J9jogFrame, font=("Arial", 14), text = "9th Axis")
+J9Lab = Label(J9jogFrame, font=("Arial", FS(14)), text = "9th Axis")
 J9Lab.place(x=15, y=5)
 J9curAngEntryField = Entry(J9jogFrame,width=5)
 J9curAngEntryField.place(x=95, y=9)
@@ -8170,9 +8355,9 @@ J9jogPosBut = Button(J9jogFrame, text="+",  width=3)
 J9jogPosBut.bind("<ButtonPress>", SelJ9jogPos)
 J9jogPosBut.bind("<ButtonRelease>", StopJog)
 J9jogPosBut.place(x=105, y=65, width=30, height=25)
-J9negLimLab = Label(J9jogFrame, font=("Arial", 8), text = str(-J9axisLimNeg), style="Jointlim.TLabel")
+J9negLimLab = Label(J9jogFrame, font=("Arial", FS(8)), text = str(-J9axisLimNeg), style="Jointlim.TLabel")
 J9negLimLab.place(x=10, y=30)
-J9posLimLab = Label(J9jogFrame, font=("Arial", 8), text = str(J9axisLimPos), style="Jointlim.TLabel")
+J9posLimLab = Label(J9jogFrame, font=("Arial", FS(8)), text = str(J9axisLimPos), style="Jointlim.TLabel")
 J9posLimLab.place(x=110, y=30)
 J9slideLimLab = Label(J9jogFrame)
 J9slideLimLab.place(x=60, y=70)
@@ -8205,7 +8390,6 @@ ProgEntryField = Entry(tab1,width=20)
 ProgEntryField.place(x=70, y=45)
 
 
-
 speedEntryField = Entry(tab1,width=4)
 speedEntryField.place(x=380, y=80)
 
@@ -8222,53 +8406,40 @@ roundEntryField = Entry(tab1,width=4)
 roundEntryField.place(x=590, y=80)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-  ### X ###
+### X ###
 
 XcurEntryField = Entry(CartjogFrame,width=5)
 XcurEntryField.place(x=660, y=195)
 
 
-   ### Y ###
+### Y ###
 
 YcurEntryField = Entry(CartjogFrame,width=5)
 YcurEntryField.place(x=750, y=195)
 
 
-   ### Z ###
+### Z ###
 
 ZcurEntryField = Entry(CartjogFrame,width=5)
 ZcurEntryField.place(x=840, y=195)
 
 
-   ### Rz ###
+### Rz ###
 
 RzcurEntryField = Entry(CartjogFrame,width=5)
 RzcurEntryField.place(x=930, y=195)
 
 
-   ### Ry ###
+### Ry ###
 
 RycurEntryField = Entry(CartjogFrame,width=5)
 RycurEntryField.place(x=1020, y=195)
 
 
-   ### Rx ###
+### Rx ###
 
 RxcurEntryField = Entry(CartjogFrame,width=5)
 RxcurEntryField.place(x=1110, y=195)
-
 
 
 ###BUTTONS################################################################
@@ -8297,8 +8468,7 @@ speedMenu=OptionMenu(tab1, speedOption, "Percent", "Percent", "Seconds", "mm per
 speedMenu.place(x=412, y=76)
 
 
-
-#single buttons
+# single buttons
 
 options=StringVar(tab1)
 menu=OptionMenu(tab1, options, "Move J", "Move J", "OFF J", "Move L", "Move R", "Move A Mid", "Move A End", "Move C Center", "Move C Start", "Move C Plane", "Start Spline", "End Spline", "Move PR", "OFF PR ", "Teach PR", "Move Vis", command=posRegFieldVisible)
@@ -8307,7 +8477,7 @@ menu.config(width=18)
 menu.place(x=700, y=180)
 
 SavePosEntryField = Entry(tab1,width=5)
-#SavePosEntryField.place(x=800, y=183)
+# SavePosEntryField.place(x=800, y=183)
 
 
 teachInsBut = Button(tab1,  text="Teach New Position", width=22, command = teachInsertBelSelected)
@@ -8329,8 +8499,7 @@ camOffBut = Button(tab1,  text="Camera Off",  width=22, command = cameraOff)
 camOffBut.place(x=700, y=420)
 
 
-
-#buttons with 1 entry
+# buttons with 1 entry
 
 waitTimeBut = Button(tab1, text="Wait Time (seconds)",  width=22,  command = waitTime)
 waitTimeBut.place(x=700, y=460)
@@ -8352,8 +8521,6 @@ tabNumBut.place(x=700, y=660)
 
 jumpTabBut = Button(tab1,  text="Jump to Tab",  width=22, command = jumpTab)
 jumpTabBut.place(x=700, y=700)
-
-
 
 
 waitTimeEntryField = Entry(tab1,width=5)
@@ -8378,11 +8545,7 @@ jumpTabEntryField = Entry(tab1,width=5)
 jumpTabEntryField.place(x=855, y=705)
 
 
-
-
-
-
-#buttons with multiple entry
+# buttons with multiple entry
 
 IfOnjumpTabBut = Button(tab1,  text="If On Jump",  width=22,   command = IfOnjumpTab)
 IfOnjumpTabBut.place(x=950, y=360)
@@ -8464,36 +8627,29 @@ visFailEntryField = Entry(tab1,width=5)
 visFailEntryField.place(x=1147, y=683)
 
 
-
-manEntLab = Label(tab1, font=("Arial", 6), text = "Manual Program Entry")
+manEntLab = Label(tab1, font=("Arial", FS(6)), text = "Manual Program Entry")
 manEntLab.place(x=10, y=685)
 
-ifOnLab = Label(tab1,font=("Arial", 6), text = " Input            Tab")
+ifOnLab = Label(tab1,font=("Arial", FS(6)), text = " Input            Tab")
 ifOnLab.place(x=1107, y=350)
 
-ifOffLab = Label(tab1,font=("Arial", 6), text = " Input            Tab")
+ifOffLab = Label(tab1,font=("Arial", FS(6)), text = " Input            Tab")
 ifOffLab.place(x=1107, y=390) 
 
-regEqLab = Label(tab1,font=("Arial", 6), text = "Register       (++/--)")
+regEqLab = Label(tab1,font=("Arial", FS(6)), text = "Register       (++/--)")
 regEqLab.place(x=1107, y=469)
 
-ifregTabJmpLab = Label(tab1,font=("Arial", 6), text = "Register        Num         Tab")
+ifregTabJmpLab = Label(tab1,font=("Arial", FS(6)), text = "Register        Num         Tab")
 ifregTabJmpLab.place(x=1107, y=509)
 
-servoLab = Label(tab1,font=("Arial", 6), text = "Number      Position")
+servoLab = Label(tab1,font=("Arial", FS(6)), text = "Number      Position")
 servoLab.place(x=1107, y=430)
 
-storPosEqLab = Label(tab1,font=("Arial", 6), text = " Pos Reg      Element       (++/--)")
+storPosEqLab = Label(tab1,font=("Arial", FS(6)), text = " Pos Reg      Element       (++/--)")
 storPosEqLab.place(x=1107, y=549)
 
-visPassLab = Label(tab1,font=("Arial", 6), text = "Pass Tab     Fail Tab")
+visPassLab = Label(tab1,font=("Arial", FS(6)), text = "Pass Tab     Fail Tab")
 visPassLab.place(x=1107, y=670)
-
-
-
-
-
-
 
 
 ProgBut = Button(tab1,  text="Load Program",   command = loadProg)
@@ -8520,13 +8676,6 @@ revBut.place(x=105, y=80)
 
 fwdBut = Button(tab1,  text="FWD", command = stepFwd)
 fwdBut.place(x=160, y=80)
-
-
-
-
-
-
-
 
 
 IncJogCbut = Checkbutton(tab1, text="Incremental Jog",variable = IncJogStat)
@@ -8824,23 +8973,10 @@ TRxjogPosBut.bind("<ButtonRelease>", StopJog)
 TRxjogPosBut.place(x=1130, y=300, width=30, height=25)
 
 
-
-
-
-
-
-
-
-
-
-
-
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####TAB 2
-
-
 
 
 ### 2 LABELS#################################################################
@@ -8895,17 +9031,14 @@ axis7rotLab.place(x=645, y=370)
 axis7stepsLab = Label(tab2, text = "Drive Steps:")
 axis7stepsLab.place(x=675, y=400)
 
-axis7pinsetLab = Label(tab2,font=("Arial", 8), text = "StepPin = 12 / DirPin = 13 / CalPin = 36")
+axis7pinsetLab = Label(tab2,font=("Arial", FS(8)), text = "StepPin = 12 / DirPin = 13 / CalPin = 36")
 axis7pinsetLab.place(x=627, y=510)
 
-axis8pinsetLab = Label(tab2,font=("Arial", 8), text = "StepPin = 32 / DirPin = 33 / CalPin = 37")
+axis8pinsetLab = Label(tab2,font=("Arial", FS(8)), text = "StepPin = 32 / DirPin = 33 / CalPin = 37")
 axis8pinsetLab.place(x=827, y=510)
 
-axis9pinsetLab = Label(tab2,font=("Arial", 8), text = "StepPin = 34 / DirPin = 35 / CalPin = 38")
+axis9pinsetLab = Label(tab2,font=("Arial", FS(8)), text = "StepPin = 34 / DirPin = 35 / CalPin = 38")
 axis9pinsetLab.place(x=1027, y=510)
-
-
-
 
 
 axis8Lab = Label(tab2, text = "8th Axis Calibration")
@@ -8932,9 +9065,6 @@ axis9rotLab.place(x=1045, y=370)
 
 axis9stepsLab = Label(tab2, text = "Drive Steps:")
 axis9stepsLab.place(x=1075, y=400)
-
-
-
 
 
 CalibrationOffsetsLab = Label(tab2, text = "Calibration Offsets")
@@ -8966,9 +9096,6 @@ J8calLab.place(x=480, y=310)
 
 J9calLab = Label(tab2, text = "J9 Offset")
 J9calLab.place(x=480, y=340)
-
-
-
 
 
 CalibrationOffsetsLab = Label(tab2, text = "Encoder Control")
@@ -9042,9 +9169,6 @@ J6calCbut2 = Checkbutton(tab2, text="J6",variable = J6CalStat2)
 J6calCbut2.place(x=355, y=200)
 
 
-
-
-
 J7zerobut = Button(tab2, text="Set Axis 7 Calibration to Zero",  width=28, command = zeroAxis7)
 J7zerobut.place(x=627, y=440)
 
@@ -9062,8 +9186,6 @@ J8calbut.place(x=827, y=475)
 
 J9calbut = Button(tab2, text="Autocalibrate Axis 9",  width=28, command = calRobotJ9)
 J9calbut.place(x=1027, y=475)
-
-
 
 
 CalJ1But = Button(tab2,   text="Calibrate J1 Only",   command = calRobotJ1)
@@ -9089,6 +9211,12 @@ CalZeroBut.place(x=270, y=425)
 
 CalRestBut = Button(tab2,   text="Force Cal. to Vert. Rest",  width=20,   command = CalRestPos)
 CalRestBut.place(x=270, y=460)
+
+CalZeroBut = Button(tab2,   text="Force Cal. to UMI gripper Home",  width=30,   command = CalHomeAngledGripperPos)
+CalZeroBut.place(x=270, y=495)
+
+CalZeroBut = Button(tab2,   text="Force Cal. to UMI gripper Rest",  width=30,   command = CalRestAngledGripperPos)
+CalZeroBut.place(x=270, y=530)
 
 J1OpenLoopCbut = Checkbutton(tab2, text="J1 Open Loop (disable encoder)",variable = J1OpenLoopStat)
 J1OpenLoopCbut.place(x=665, y=90)
@@ -9156,7 +9284,6 @@ J9calOffEntryField = Entry(tab2,width=8)
 J9calOffEntryField.place(x=540, y=340)
 
 
-
 axis7lengthEntryField = Entry(tab2,width=6)
 axis7lengthEntryField.place(x=750, y=340)
 
@@ -9185,8 +9312,7 @@ axis9stepsEntryField = Entry(tab2,width=6)
 axis9stepsEntryField.place(x=1150, y=400)
 
 
-
-   ### Tool Frame ###
+### Tool Frame ###
 
 TFxEntryField = Entry(tab2,width=5)
 TFxEntryField.place(x=910, y=115)
@@ -9202,13 +9328,10 @@ TFrxEntryField = Entry(tab2,width=5)
 TFrxEntryField.place(x=1110, y=115)
 
 
-
-
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####TAB 3
-
 
 
 ### 3 LABELS#################################################################
@@ -9237,7 +9360,6 @@ servo3onequalsLab.place(x=70, y=252)
 
 servo3offequalsLab = Label(tab3, text = "=")
 servo3offequalsLab.place(x=70, y=292)
-
 
 
 Do1onequalsLab = Label(tab3, text = "=")
@@ -9312,9 +9434,6 @@ servo3offBut = Button(tab3,  text="Servo 3",  command = Servo3off)
 servo3offBut.place(x=10, y=290)
 
 
-
-
-
 DO1onBut = Button(tab3,  text="DO on",  command = DO1on)
 DO1onBut.place(x=150, y=10)
 
@@ -9352,7 +9471,6 @@ DO6offBut = Button(tab3,  text="DO off",  command = DO6off)
 DO6offBut.place(x=150, y=450)
 
 
-
 #### 3 ENTRY FIELDS##########################################################
 #############################################################################
 
@@ -9381,9 +9499,6 @@ servo3onEntryField.place(x=90, y=255)
 
 servo3offEntryField = Entry(tab3,width=5)
 servo3offEntryField.place(x=90, y=295)
-
-
-
 
 
 DO1onEntryField = Entry(tab3,width=5)
@@ -9423,13 +9538,10 @@ DO6offEntryField = Entry(tab3,width=5)
 DO6offEntryField.place(x=230, y=455)
 
 
-
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####TAB 4
-
-
 
 
 ### 4 LABELS#################################################################
@@ -9552,11 +9664,8 @@ SP_E6_Lab = Label(tab4, text = "Rx")
 SP_E6_Lab.place(x=610, y=10)
 
 
-
 ### 4 BUTTONS################################################################
 #############################################################################
-
-
 
 
 #### 4 ENTRY FIELDS##########################################################
@@ -9611,8 +9720,6 @@ R16EntryField = Entry(tab4,width=5)
 R16EntryField.place(x=30, y=480)
 
 
-
-
 SP_1_E1_EntryField = Entry(tab4,width=5)
 SP_1_E1_EntryField.place(x=400, y=30)
 
@@ -9660,9 +9767,6 @@ SP_15_E1_EntryField.place(x=400, y=450)
 
 SP_16_E1_EntryField = Entry(tab4,width=5)
 SP_16_E1_EntryField.place(x=400, y=480)
-
-
-
 
 
 SP_1_E2_EntryField = Entry(tab4,width=5)
@@ -9714,8 +9818,6 @@ SP_16_E2_EntryField = Entry(tab4,width=5)
 SP_16_E2_EntryField.place(x=440, y=480)
 
 
-
-
 SP_1_E3_EntryField = Entry(tab4,width=5)
 SP_1_E3_EntryField.place(x=480, y=30)
 
@@ -9763,8 +9865,6 @@ SP_15_E3_EntryField.place(x=480, y=450)
 
 SP_16_E3_EntryField = Entry(tab4,width=5)
 SP_16_E3_EntryField.place(x=480, y=480)
-
-
 
 
 SP_1_E4_EntryField = Entry(tab4,width=5)
@@ -9864,8 +9964,6 @@ SP_16_E5_EntryField = Entry(tab4,width=5)
 SP_16_E5_EntryField.place(x=560, y=480)
 
 
-
-
 SP_1_E6_EntryField = Entry(tab4,width=5)
 SP_1_E6_EntryField.place(x=600, y=30)
 
@@ -9915,21 +10013,10 @@ SP_16_E6_EntryField = Entry(tab4,width=5)
 SP_16_E6_EntryField.place(x=600, y=480)
 
 
-
-
-
-
-
-
-
-
-
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####TAB 5
-
-
 
 
 ### 5 LABELS#################################################################
@@ -9940,8 +10027,7 @@ VisBackdromLbl = Label(tab5, image = VisBackdropImg)
 VisBackdromLbl.place(x=15, y=215)
 
 
-
-#cap= cv2.VideoCapture(0)
+# cap= cv2.VideoCapture(0)
 video_frame = Frame(tab5,width=640,height=480)
 video_frame.place(x=50, y=250)
 
@@ -9962,7 +10048,6 @@ live_lbl = Label(live_frame)
 live_lbl.place(x=0, y=0)
 
 
-
 template_frame = Frame(tab5,width=150,height=150)
 template_frame.place(x=575, y=50)
 
@@ -9976,47 +10061,45 @@ CalValuesLab = Label(tab5, text = "CALIBRATION VALUES")
 CalValuesLab.place(x=900, y=30)
 
 
-
 VisFileLocLab = Label(tab5, text = "Vision File Location:")
-#VisFileLocLab.place(x=10, y=12)
+# VisFileLocLab.place(x=10, y=12)
 
 VisCalPixLab = Label(tab5, text = "Calibration Pixels:")
-#VisCalPixLab.place(x=10, y=75)
+# VisCalPixLab.place(x=10, y=75)
 
 VisCalmmLab = Label(tab5, text = "Calibration Robot MM:")
-#VisCalmmLab.place(x=10, y=105)
+# VisCalmmLab.place(x=10, y=105)
 
 VisCalOxLab = Label(tab5, text = "Orig: X")
-#VisCalOxLab.place(x=150, y=42)
+# VisCalOxLab.place(x=150, y=42)
 
 VisCalOyLab = Label(tab5, text = "Orig: Y")
-#VisCalOyLab.place(x=210, y=42)
+# VisCalOyLab.place(x=210, y=42)
 
 VisCalXLab = Label(tab5, text = "End: X")
-#VisCalXLab.place(x=270, y=42)
+# VisCalXLab.place(x=270, y=42)
 
 VisCalYLab = Label(tab5, text = "End: Y")
-#VisCalYLab.place(x=330, y=42)
-
+# VisCalYLab.place(x=330, y=42)
 
 
 VisInTypeLab = Label(tab5, text = "Choose Vision Format")
-#VisInTypeLab.place(x=500, y=38)
+# VisInTypeLab.place(x=500, y=38)
 
 VisXfoundLab = Label(tab5, text = "X found position (mm)")
-#VisXfoundLab.place(x=540, y=100)
+# VisXfoundLab.place(x=540, y=100)
 
 VisYfoundLab = Label(tab5, text = "Y found position (mm)")
-#VisYfoundLab.place(x=540, y=130)
+# VisYfoundLab.place(x=540, y=130)
 
 VisRZfoundLab = Label(tab5, text = "R found position (ang)")
-#VisRZfoundLab.place(x=540, y=160)
+# VisRZfoundLab.place(x=540, y=160)
 
 VisXpixfoundLab = Label(tab5, text = "X pixes returned from camera")
-#VisXpixfoundLab.place(x=760, y=100)
+# VisXpixfoundLab.place(x=760, y=100)
 
 VisYpixfoundLab = Label(tab5, text = "Y pixes returned from camera")
-#VisYpixfoundLab.place(x=760, y=130)
+# VisYpixfoundLab.place(x=760, y=130)
 
 ### 5 BUTTONS################################################################
 #############################################################################
@@ -10062,11 +10145,6 @@ maskBut = Button(tab5, text="Mask",  width=5, command = selectMask)
 maskBut.place(x=10, y=150)
 
 
-
-
-
-
-
 VisZoomSlide = Scale(tab5, from_=50, to=1,  length=250, orient=HORIZONTAL)
 VisZoomSlide.bind("<ButtonRelease-1>", VisUpdateBriCon)
 VisZoomSlide.place(x=75, y=95)
@@ -10100,19 +10178,12 @@ pickClosestCbut = Checkbutton(tab5, text="Try Closest When Out of Range",variabl
 pickClosestCbut.place(x=900, y=295)
 
 
-
-
-
 saveCalBut = Button(tab5,  text="SAVE VISION DATA",  width=26, command = SaveAndApplyCalibration)
 saveCalBut.place(x=915, y=340)
 
 
-
-
-
 #### 5 ENTRY FIELDS##########################################################
 #############################################################################
-
 
 
 VisBacColorEntryField = Entry(tab5,width=15)
@@ -10127,8 +10198,6 @@ VisScoreEntryField = Entry(tab5,width=15)
 VisScoreEntryField.place(x=390, y=150)
 VisScoreLab = Label(tab5, text = "Score Threshold")
 VisScoreLab.place(x=390, y=170)
-
-
 
 
 VisRetScoreEntryField = Entry(tab5,width=15)
@@ -10160,11 +10229,6 @@ VisRetYrobEntryField = Entry(tab5,width=15)
 VisRetYrobEntryField.place(x=750, y=305)
 VisRetYrobLab = Label(tab5, text = "Robot Y Position")
 VisRetYrobLab.place(x=750, y=325)
-
-
-
-
-
 
 
 VisX1PixEntryField = Entry(tab5,width=15)
@@ -10209,51 +10273,47 @@ VisY2RobLab = Label(tab5, text = "Y2 Robot Pos")
 VisY2RobLab.place(x=1010, y=225)
 
 
-
-
-
-
 VisFileLocEntryField = Entry(tab5,width=70)
-#VisFileLocEntryField.place(x=125, y=12)
+# VisFileLocEntryField.place(x=125, y=12)
 
 VisPicOxPEntryField = Entry(tab5,width=5)
-#VisPicOxPEntryField.place(x=155, y=75)
+# VisPicOxPEntryField.place(x=155, y=75)
 
 VisPicOxMEntryField = Entry(tab5,width=5)
-#VisPicOxMEntryField.place(x=155, y=105)
+# VisPicOxMEntryField.place(x=155, y=105)
 
 VisPicOyPEntryField = Entry(tab5,width=5)
-#VisPicOyPEntryField.place(x=215, y=75)
+# VisPicOyPEntryField.place(x=215, y=75)
 
 VisPicOyMEntryField = Entry(tab5,width=5)
-#VisPicOyMEntryField.place(x=215, y=105)
+# VisPicOyMEntryField.place(x=215, y=105)
 
 VisPicXPEntryField = Entry(tab5,width=5)
-#VisPicXPEntryField.place(x=275, y=75)
+# VisPicXPEntryField.place(x=275, y=75)
 
 VisPicXMEntryField = Entry(tab5,width=5)
-#VisPicXMEntryField.place(x=275, y=105)
+# VisPicXMEntryField.place(x=275, y=105)
 
 VisPicYPEntryField = Entry(tab5,width=5)
-#VisPicYPEntryField.place(x=335, y=75)
+# VisPicYPEntryField.place(x=335, y=75)
 
 VisPicYMEntryField = Entry(tab5,width=5)
-#VisPicYMEntryField.place(x=335, y=105)
+# VisPicYMEntryField.place(x=335, y=105)
 
 VisXfindEntryField = Entry(tab5,width=5)
-#VisXfindEntryField.place(x=500, y=100)
+# VisXfindEntryField.place(x=500, y=100)
 
 VisYfindEntryField = Entry(tab5,width=5)
-#VisYfindEntryField.place(x=500, y=130)
+# VisYfindEntryField.place(x=500, y=130)
 
 VisRZfindEntryField = Entry(tab5,width=5)
-#VisRZfindEntryField.place(x=500, y=160)
+# VisRZfindEntryField.place(x=500, y=160)
 
 VisXpixfindEntryField = Entry(tab5,width=5)
-#VisXpixfindEntryField.place(x=720, y=100)
+# VisXpixfindEntryField.place(x=720, y=100)
 
 VisYpixfindEntryField = Entry(tab5,width=5)
-#VisYpixfindEntryField.place(x=720, y=130)
+# VisYpixfindEntryField.place(x=720, y=130)
 
 
 ####################################################################################################################################################
@@ -10284,8 +10344,6 @@ def clearLog():
 
 clearLogBut = Button(tab6,  text="Clear Log",  width=26, command = clearLog)
 clearLogBut.place(x=1000, y=630)
-
-
 
 
 ####################################################################################################################################################
@@ -10348,7 +10406,6 @@ testSendEntryField.place(x=10, y=40)
 
 testRecEntryField = Entry(tab10,width=222)
 testRecEntryField.place(x=10, y=90)
-
 
 
 ##############################################################################################################################################################
@@ -10614,7 +10671,7 @@ J7curAngEntryField.insert(0,str(J7PosCur))
 J8curAngEntryField.insert(0,str(J8PosCur))
 J9curAngEntryField.insert(0,str(J9PosCur))
 VisFileLocEntryField.insert(0,str(VisFileLoc))
-#visoptions.set(VisProg)
+# visoptions.set(VisProg)
 VisPicOxPEntryField.insert(0,str(VisOrigXpix))
 VisPicOxMEntryField.insert(0,str(VisOrigXmm))
 VisPicOyPEntryField.insert(0,str(VisOrigYpix))
@@ -10709,10 +10766,6 @@ axis9rotEntryField.insert(0,str(J9rotation))
 axis9stepsEntryField.insert(0,str(J9steps))
 
 
-
-
-
-
 setCom()
 setCom2()
 
@@ -10749,9 +10802,14 @@ xboxUse = 0
 
 
 
+# root.update_idletasks()
+# root.geometry(f"{root.winfo_reqwidth()}x{root.winfo_reqheight()}+0+0")
+# root.resizable(False, False)
+
+
+
 tab1.mainloop()
 
 
-
-#manEntryField.delete(0, 'end')
-#manEntryField.insert(0,value)
+# manEntryField.delete(0, 'end')
+# manEntryField.insert(0,value)
