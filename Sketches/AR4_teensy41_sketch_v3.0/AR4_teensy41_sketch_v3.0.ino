@@ -60,6 +60,7 @@ String recData;
 String checkData;
 String function;
 volatile byte state = LOW;
+volatile bool robotBusy = false;
 
 const int debugg = 0;
 
@@ -4468,6 +4469,9 @@ void loop() {
     //-----------------------------------------------------------------------
     if (function == "LL")
     {
+      robotBusy = true;
+      Serial.println("ACK");   // or "ACK MJ", "ACK ML" etc.
+
       int J1start = inData.indexOf('A');
       int J2start = inData.indexOf('B');
       int J3start = inData.indexOf('C');
@@ -4823,11 +4827,15 @@ void loop() {
         float ACCramp = 50;
 
         driveMotorsJ(J1stepCen, J2stepCen, J3stepCen, J4stepCen, J5stepCen, J6stepCen, J7stepCen, J8stepCen, J9stepCen, J1dir, J2dir, J3dir, J4dir, J5dir, J6dir, J7dir, J8dir, J9dir, SpeedType, SpeedVal, ACCspd, DCCspd, ACCramp);
+robotBusy = false;
+        Serial.println("DONE"); // or "DONE MJ"
         sendRobotPos();
 
       }
       else {
         delay(5);
+robotBusy = false;
+        Serial.println("DONE");   // optional, but consistent
         Serial.println(Alarm);
         Alarm = "0";
       }
@@ -4835,322 +4843,18 @@ void loop() {
       inData = ""; // Clear recieved buffer
     }
 
-
-
-
-
-
-
-
-    //----- LIVE CARTESIAN JOG  ---------------------------------------------------
+    //----- Query Robot Status  ---------------------------------------------------
     //-----------------------------------------------------------------------
-    if (function == "LC")
+    if (function == "QS")
     {
       delay(5);
       Serial.println();
 
 
       updatePos();
-
-      int J1dir;
-      int J2dir;
-      int J3dir;
-      int J4dir;
-      int J5dir;
-      int J6dir;
-      int J7dir;
-      int J8dir;
-      int J9dir;
-
-      int J1axisFault = 0;
-      int J2axisFault = 0;
-      int J3axisFault = 0;
-      int J4axisFault = 0;
-      int J5axisFault = 0;
-      int J6axisFault = 0;
-      int TotalAxisFault = 0;
-
-      bool JogInPoc = true;
-      Alarm = "0";
-
-
-      int VStart = inData.indexOf("V");
-      int SPstart = inData.indexOf("S");
-      int AcStart = inData.indexOf("Ac");
-      int DcStart = inData.indexOf("Dc");
-      int RmStart = inData.indexOf("Rm");
-      int WristConStart = inData.indexOf("W");
-      int LoopModeStart = inData.indexOf("Lm");
-
-
-      float Vector = inData.substring(VStart + 1, SPstart).toFloat();
-      String SpeedType = inData.substring(SPstart + 1, SPstart + 2);
-      float SpeedVal = inData.substring(SPstart + 2, AcStart).toFloat();
-      float ACCspd = 100;
-      float DCCspd = 100;
-      float ACCramp = 100;
-      String WristCon = inData.substring(WristConStart + 1, LoopModeStart);
-      String LoopMode = inData.substring(LoopModeStart + 2);
-      LoopMode.trim();
-      J1LoopMode = LoopMode.substring(0, 1).toInt();
-      J2LoopMode = LoopMode.substring(1, 2).toInt();
-      J3LoopMode = LoopMode.substring(2, 3).toInt();
-      J4LoopMode = LoopMode.substring(3, 4).toInt();
-      J5LoopMode = LoopMode.substring(4, 5).toInt();
-      J6LoopMode = LoopMode.substring(5).toInt();
-
-      inData = ""; // Clear recieved buffer
-
-      xyzuvw_In[0] = xyzuvw_Out[0];
-      xyzuvw_In[1] = xyzuvw_Out[1];
-      xyzuvw_In[2] = xyzuvw_Out[2];
-      xyzuvw_In[3] = xyzuvw_Out[3];
-      xyzuvw_In[4] = xyzuvw_Out[4];
-      xyzuvw_In[5] = xyzuvw_Out[5];
-
-      while (JogInPoc = true) {
-
-        if (Vector == 10) {
-          xyzuvw_In[0] = xyzuvw_Out[0] - 1;
-        }
-        if (Vector == 11) {
-          xyzuvw_In[0] = xyzuvw_Out[0] + 1;
-        }
-
-        if (Vector == 20) {
-          xyzuvw_In[1] = xyzuvw_Out[1] - 1;
-        }
-        if (Vector == 21) {
-          xyzuvw_In[1] = xyzuvw_Out[1] + 1;
-        }
-
-        if (Vector == 30) {
-          xyzuvw_In[2] = xyzuvw_Out[2] - 1;
-        }
-        if (Vector == 31) {
-          xyzuvw_In[2] = xyzuvw_Out[2] + 1;
-        }
-
-        if (Vector == 40) {
-          xyzuvw_In[3] = xyzuvw_Out[3] - 1;
-        }
-        if (Vector == 41) {
-          xyzuvw_In[3] = xyzuvw_Out[3] + 1;
-        }
-
-        if (Vector == 50) {
-          xyzuvw_In[4] = xyzuvw_Out[4] - 1;
-        }
-        if (Vector == 51) {
-          xyzuvw_In[4] = xyzuvw_Out[4] + 1;
-        }
-
-        if (Vector == 60) {
-          xyzuvw_In[5] = xyzuvw_Out[5] - 1;
-        }
-        if (Vector == 61) {
-          xyzuvw_In[5] = xyzuvw_Out[5] + 1;
-        }
-
-        SolveInverseKinematic();
-
-        //calc destination motor steps
-        int J1futStepM = (JangleOut[0] + J1axisLimNeg) * J1StepDeg;
-        int J2futStepM = (JangleOut[1] + J2axisLimNeg) * J2StepDeg;
-        int J3futStepM = (JangleOut[2] + J3axisLimNeg) * J3StepDeg;
-        int J4futStepM = (JangleOut[3] + J4axisLimNeg) * J4StepDeg;
-        int J5futStepM = (JangleOut[4] + J5axisLimNeg) * J5StepDeg;
-        int J6futStepM = (JangleOut[5] + J6axisLimNeg) * J6StepDeg;
-
-        //calc delta from current to destination
-        int J1stepDif = J1StepM - J1futStepM;
-        int J2stepDif = J2StepM - J2futStepM;
-        int J3stepDif = J3StepM - J3futStepM;
-        int J4stepDif = J4StepM - J4futStepM;
-        int J5stepDif = J5StepM - J5futStepM;
-        int J6stepDif = J6StepM - J6futStepM;
-        int J7stepDif = 0;
-        int J8stepDif = 0;
-        int J9stepDif = 0;
-
-        //determine motor directions
-        if (J1stepDif <= 0) {
-          J1dir = 1;
-        }
-        else {
-          J1dir = 0;
-        }
-
-        if (J2stepDif <= 0) {
-          J2dir = 1;
-        }
-        else {
-          J2dir = 0;
-        }
-
-        if (J3stepDif <= 0) {
-          J3dir = 1;
-        }
-        else {
-          J3dir = 0;
-        }
-
-        if (J4stepDif <= 0) {
-          J4dir = 1;
-        }
-        else {
-          J4dir = 0;
-        }
-
-        if (J5stepDif <= 0) {
-          J5dir = 1;
-        }
-        else {
-          J5dir = 0;
-        }
-
-        if (J6stepDif <= 0) {
-          J6dir = 1;
-        }
-        else {
-          J6dir = 0;
-        }
-        J7dir = 0;
-        J8dir = 0;
-        J9dir = 0;
-
-
-        //determine if requested position is within axis limits
-        if ((J1dir == 1 and (J1StepM + J1stepDif > J1StepLim)) or (J1dir == 0 and (J1StepM - J1stepDif < 0))) {
-          J1axisFault = 1;
-        }
-        if ((J2dir == 1 and (J2StepM + J2stepDif > J2StepLim)) or (J2dir == 0 and (J2StepM - J2stepDif < 0))) {
-          J2axisFault = 1;
-        }
-        if ((J3dir == 1 and (J3StepM + J3stepDif > J3StepLim)) or (J3dir == 0 and (J3StepM - J3stepDif < 0))) {
-          J3axisFault = 1;
-        }
-        if ((J4dir == 1 and (J4StepM + J4stepDif > J4StepLim)) or (J4dir == 0 and (J4StepM - J4stepDif < 0))) {
-          J4axisFault = 1;
-        }
-        if ((J5dir == 1 and (J5StepM + J5stepDif > J5StepLim)) or (J5dir == 0 and (J5StepM - J5stepDif < 0))) {
-          J5axisFault = 1;
-        }
-        if ((J6dir == 1 and (J6StepM + J6stepDif > J6StepLim)) or (J6dir == 0 and (J6StepM - J6stepDif < 0))) {
-          J6axisFault = 1;
-        }
-        TotalAxisFault = J1axisFault + J2axisFault + J3axisFault + J4axisFault + J5axisFault + J6axisFault;
-
-
-        //send move command if no axis limit error
-        if (TotalAxisFault == 0 && KinematicError == 0) {
-          resetEncoders();
-          driveMotorsJ(abs(J1stepDif), abs(J2stepDif), abs(J3stepDif), abs(J4stepDif), abs(J5stepDif), abs(J6stepDif), abs(J7stepDif), abs(J8stepDif), abs(J9stepDif), J1dir, J2dir, J3dir, J4dir, J5dir, J6dir, J7dir, J8dir, J9dir, SpeedType, SpeedVal, ACCspd, DCCspd, ACCramp);
-          //checkEncoders();
-          J1EncSteps = J1encPos.read() / J1encMult;
-          J2EncSteps = J2encPos.read() / J2encMult;
-          J3EncSteps = J3encPos.read() / J3encMult;
-          J4EncSteps = J4encPos.read() / J4encMult;
-          J5EncSteps = J5encPos.read() / J5encMult;
-          J6EncSteps = J6encPos.read() / J6encMult;
-
-
-          if (J1LoopMode == 0) {
-            if (abs((J1EncSteps - J1StepM)) >= 5) {
-              J1collisionTrue = 1;
-              J1StepM = J1encPos.read() / J1encMult;
-            }
-          }
-
-
-
-          if (J2LoopMode == 0) {
-            if (abs((J2EncSteps - J2StepM)) >= 5) {
-              J2collisionTrue = 1;
-              J2StepM = J2encPos.read() / J2encMult;
-            }
-          }
-
-
-
-          if (J3LoopMode == 0) {
-            if (abs((J3EncSteps - J3StepM)) >= 5) {
-              J3collisionTrue = 1;
-              J3StepM = J3encPos.read() / J3encMult;
-            }
-          }
-
-
-
-          if (J4LoopMode == 0) {
-            if (abs((J4EncSteps - J4StepM)) >= 5) {
-              J4collisionTrue = 1;
-              J4StepM = J4encPos.read() / J4encMult;
-            }
-          }
-
-
-
-          if (J5LoopMode == 0) {
-            if (abs((J5EncSteps - J5StepM)) >= 5) {
-              J5collisionTrue = 1;
-              J5StepM = J5encPos.read() / J5encMult;
-            }
-          }
-
-
-
-          if (J6LoopMode == 0) {
-            if (abs((J6EncSteps - J6StepM)) >= 5) {
-              J6collisionTrue = 1;
-              J6StepM = J6encPos.read() / J6encMult;
-            }
-          }
-
-
-
-          updatePos();
-        }
-
-        //stop loop if any serial command is recieved - but the expected command is "S" to stop the loop.
-
-        char recieved = Serial.read();
-        inData += recieved;
-        if (recieved == '\n') {
-          break;
-        }
-
-        //end loop
-      }
-
-      TotalCollision = J1collisionTrue + J2collisionTrue + J3collisionTrue + J4collisionTrue + J5collisionTrue + J6collisionTrue;
-      if (TotalCollision > 0) {
-        flag = "EC" + String(J1collisionTrue) + String(J2collisionTrue) + String(J3collisionTrue) + String(J4collisionTrue) + String(J5collisionTrue) + String(J6collisionTrue);
-      }
-
-      //send move command if no axis limit error
-      if (TotalAxisFault == 0 && KinematicError == 0) {
-        sendRobotPos();
-      }
-      else if (KinematicError == 1) {
-        Alarm = "ER";
-        delay(5);
-        Serial.println(Alarm);
-        Alarm = "0";
-      }
-      else {
-        Alarm = "EL" + String(J1axisFault) + String(J2axisFault) + String(J3axisFault) + String(J4axisFault) + String(J5axisFault) + String(J6axisFault);
-        delay(5);
-        Serial.println(Alarm);
-        Alarm = "0";
-      }
-
-      inData = ""; // Clear recieved buffer
-      ////////MOVE COMPLETE///////////
-    }
-
-
-
+    if (function == "QS")
+      // Status query (single-line): keep legacy BUSY/IDLE first, add ESTOP flag for GUI
+      Serial.print(robotBusy ? "BUSY" : "IDLE");
 
 
 

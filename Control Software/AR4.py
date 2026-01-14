@@ -5249,25 +5249,144 @@ def CalcLinWayPt(CX,CY,CZ,curWayPt,):
 
 ##############################################################################################################################################################
 ### CALIBRATION & SAVE DEFS ###################################################################################################### CALIBRATION & SAVE DEFS ###
-##############################################################################################################################################################	
+##############################################################################################################################################################
+## Helper functions
+
+def _readline_text(s):
+    line = s.readline()
+    if not line:
+        return ""
+    
+    cleanString = line.decode("utf-8", errors="replace").strip()
+    print("[TEENSY]", cleanString)
+    return cleanString
+
+def send_cmd_wait_ack_done(cmd, ack_timeout=1.0, done_timeout=60.0):
+    """
+    Send cmd (must include trailing \\n), wait for ACK, then wait for DONE or final result.
+    Returns a tuple: (status, last_line)
+      status: "done", "alarm", "timeout_ack", "timeout_done", "unexpected"
+      last_line: last non-empty line we saw
+    """
+    # Clear any stale input BEFORE sending
+    ser.reset_input_buffer()
+
+    ser.write(cmd.encode("utf-8"))
+    ser.flush()
+
+    # --- wait for ACK ---
+    t0 = time.time()
+    last = ""
+    while time.time() - t0 < ack_timeout:
+        line = _readline_text(ser)
+        if not line:
+            continue
+        last = line
+        if line.startswith("ACK"):
+            break
+        # If firmware ever returns alarm immediately, handle it:
+        if line and line[0].isdigit():
+            return ("alarm", line)
+        # If it sends position immediately:
+        if line.startswith("A"):
+            return ("done", line)
+    else:
+        return ("timeout_ack", last)
+
+    # --- wait for DONE / alarm / position ---
+    t1 = time.time()
+    while time.time() - t1 < done_timeout:
+        line = _readline_text(ser)
+        if not line:
+            # keep UI responsive if you're in the GUI thread
+            try:
+                root.update()
+            except Exception:
+                pass
+            continue
+        last = line
+
+        if line.startswith("DONE"):
+            # After DONE, your firmware also calls sendRobotPos(),
+            # so we can optionally read the next A... line
+            # (don’t block forever—just try a bit)
+            t2 = time.time()
+            while time.time() - t2 < 2.0:
+                nxt = _readline_text(ser)
+                if nxt:
+                    last = nxt
+                    if nxt.startswith("A"):
+                        break
+            return ("done", last)
+
+        if line.startswith("A"):
+            return ("done", line)
+
+        if line and line[0].isdigit():
+            return ("alarm", line)
+
+        # ignore other chatter
+    return ("timeout_done", last)
+
+
+
 
 def calRobotAll():
   ##### STAGE 1 ########
   command = "LL"+"A"+str(J1CalStatVal)+"B"+str(J2CalStatVal)+"C"+str(J3CalStatVal)+"D"+str(J4CalStatVal)+"E"+str(J5CalStatVal)+"F"+str(J6CalStatVal)+"G0H0I0"+"J"+str(J1calOff)+"K"+str(J2calOff)+"L"+str(J3calOff)+"M"+str(J4calOff)+"N"+str(J5calOff)+"O"+str(J6calOff)+"P"+str(J7calOff)+"Q"+str(J8calOff)+"R"+str(J9calOff)+"\n" 
-  ser.write(command.encode())
+  #ser.reset_input_buffer()          # optional: clear OLD junk
+  #ser.write(command.encode())
   cmdSentEntryField.delete(0, 'end')
   cmdSentEntryField.insert(0,command)
-  ser.flushInput()
-  response = str(ser.readline().strip(),'utf-8')
-  if (response[:1] == 'A'):
-    displayPosition(response)  
+  # ser.flushInput()
+  #ser.flush()                       # ensures the command is transmitted
+
+  status, line = send_cmd_wait_ack_done(command, ack_timeout=1.0, done_timeout=45.0)
+
+
+  if status == "done" and line.startswith("A"):
+    displayPosition(line)
     message = "Auto Calibration Stage 1 Successful"
     almStatusLab.config(text=message, style="OK.TLabel")
-    almStatusLab2.config(text=message, style="OK.TLabel") 
-  else:
-    message = "Auto Calibration Stage 1 Failed" 
+    almStatusLab2.config(text=message, style="OK.TLabel")
+  elif status == "alarm":
+    message = f"Auto Calibration Stage 1 Failed (Alarm {line})"
     almStatusLab.config(text=message, style="Alarm.TLabel")
     almStatusLab2.config(text=message, style="Alarm.TLabel")
+  elif status == "timeout_ack":
+    message = "Auto Calibration Stage 1 Failed (no ACK)"
+    almStatusLab.config(text=message, style="Alarm.TLabel")
+    almStatusLab2.config(text=message, style="Alarm.TLabel")
+  elif status == "timeout_done":
+    message = "Auto Calibration Stage 1 Failed (timeout waiting for DONE)"
+    almStatusLab.config(text=message, style="Alarm.TLabel")
+    almStatusLab2.config(text=message, style="Alarm.TLabel")
+  else:
+    message = f"Auto Calibration Stage 1 Failed ({status}: {line})"
+    almStatusLab.config(text=message, style="Alarm.TLabel")
+    almStatusLab2.config(text=message, style="Alarm.TLabel")
+
+
+  #old_timeout = ser.timeout
+  #ser.timeout = 30  # seconds, covers your ~15s calibration
+  ## response = str(ser.readline().strip(),'utf-8')
+  #response = ser.readline().decode('utf-8', errors='replace').strip()
+  #ser.timeout = old_timeout
+
+  #if not response:
+  #  message = "No response (timeout) from controller"
+  #  almStatusLab.config(text=message, style="Alarm.TLabel")
+  #  almStatusLab2.config(text=message, style="Alarm.TLabel")
+  #elif response.startswith('A'):
+  ##if (response[:1] == 'A'):
+  #  displayPosition(response)  
+  #  message = "Auto Calibration Stage 1 Successful"
+  #  almStatusLab.config(text=message, style="OK.TLabel")
+  #  almStatusLab2.config(text=message, style="OK.TLabel") 
+  #else:
+  #  message = "Auto Calibration Stage 1 Failed" 
+  #  almStatusLab.config(text=message, style="Alarm.TLabel")
+  #  almStatusLab2.config(text=message, style="Alarm.TLabel")
   Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
   tab6.ElogView.insert(END, Curtime+" - "+message)
   value=tab6.ElogView.get(0,END)
@@ -5276,20 +5395,57 @@ def calRobotAll():
   CalStatVal2 = int(J1CalStatVal2)+int(J2CalStatVal2)+int(J3CalStatVal2)+int(J4CalStatVal2)+int(J5CalStatVal2)+int(J6CalStatVal2)
   if(CalStatVal2>0):
     command = "LL"+"A"+str(J1CalStatVal2)+"B"+str(J2CalStatVal2)+"C"+str(J3CalStatVal2)+"D"+str(J4CalStatVal2)+"E"+str(J5CalStatVal2)+"F"+str(J6CalStatVal2)+"G0H0I0"+"J"+str(J1calOff)+"K"+str(J2calOff)+"L"+str(J3calOff)+"M"+str(J4calOff)+"N"+str(J5calOff)+"O"+str(J6calOff)+"P"+str(J7calOff)+"Q"+str(J8calOff)+"R"+str(J9calOff)+"\n" 
-    ser.write(command.encode())
+    #ser.reset_input_buffer()          # optional: clear OLD junk    
+    #ser.write(command.encode())
     cmdSentEntryField.delete(0, 'end')
     cmdSentEntryField.insert(0,command)
-    ser.flushInput()
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'A'):
-      displayPosition(response)  
+    # ser.flushInput()
+    #ser.flush()                       # ensures the command is transmitted
+
+    status, line = send_cmd_wait_ack_done(command, ack_timeout=1.0, done_timeout=45.0)
+
+    if status == "done" and line.startswith("A"):
+      displayPosition(line)
       message = "Auto Calibration Stage 2 Successful"
       almStatusLab.config(text=message, style="OK.TLabel")
-      almStatusLab2.config(text=message, style="OK.TLabel") 
-    else:
-      message = "Auto Calibration Stage 2 Failed" 
+      almStatusLab2.config(text=message, style="OK.TLabel")
+    elif status == "alarm":
+      message = f"Auto Calibration Stage 2 Failed (Alarm {line})"
       almStatusLab.config(text=message, style="Alarm.TLabel")
       almStatusLab2.config(text=message, style="Alarm.TLabel")
+    elif status == "timeout_ack":
+      message = "Auto Calibration Stage 2 Failed (no ACK)"
+      almStatusLab.config(text=message, style="Alarm.TLabel")
+      almStatusLab2.config(text=message, style="Alarm.TLabel")
+    elif status == "timeout_done":
+      message = "Auto Calibration Stage 2 Failed (timeout waiting for DONE)"
+      almStatusLab.config(text=message, style="Alarm.TLabel")
+      almStatusLab2.config(text=message, style="Alarm.TLabel")
+    else:
+      message = f"Auto Calibration Stage 2 Failed ({status}: {line})"
+      almStatusLab.config(text=message, style="Alarm.TLabel")
+      almStatusLab2.config(text=message, style="Alarm.TLabel")
+
+    #old_timeout = ser.timeout
+    #ser.timeout = 10  # seconds, covers your ~15s calibration
+    ## response = str(ser.readline().strip(),'utf-8')
+    #response = ser.readline().decode('utf-8', errors='replace').strip()
+    #ser.timeout = old_timeout
+
+    #if not response:
+    #  message = "No response (timeout) from controller"
+    #  almStatusLab.config(text=message, style="Alarm.TLabel")
+    #  almStatusLab2.config(text=message, style="Alarm.TLabel")
+    #elif response.startswith('A'):
+    ##if (response[:1] == 'A'):
+    #  displayPosition(response)  
+    #  message = "Auto Calibration Stage 2 Successful"
+    #  almStatusLab.config(text=message, style="OK.TLabel")
+    #  almStatusLab2.config(text=message, style="OK.TLabel") 
+    #else:
+    #  message = "Auto Calibration Stage 2 Failed" 
+    #  almStatusLab.config(text=message, style="Alarm.TLabel")
+    #  almStatusLab2.config(text=message, style="Alarm.TLabel")
     Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
     tab6.ElogView.insert(END, Curtime+" - "+message)
     value=tab6.ElogView.get(0,END)
