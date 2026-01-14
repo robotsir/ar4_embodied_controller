@@ -64,6 +64,20 @@ volatile bool robotBusy = false;
 
 const int debugg = 0;
 
+// --- Soft E-Stop (firmware hold-stop) ------------------------------------
+// NOTE: This is NOT a replacement for the existing hardware E-stop that cuts power.
+// This soft E-stop is intended to stop motion immediately while keeping the drivers enabled
+// so the arm holds position (no free-fall), as long as the MCU/firmware is running.
+//
+// Wire an NC E-stop contact to ESTOP_PIN -> GND. (INPUT_PULLUP + NC-to-GND means normal=LOW, pressed/open=HIGH)
+#define ESTOP_PIN 32
+
+volatile bool estop_latched = false;   // blocks motion until cleared by ER command
+bool estop_handled = false;            // one-shot: clear buffers/flags when E-stop first latches
+
+void estopISR();
+// --------------------------------------------------------------------------
+
 const int J1stepPin = 0;
 const int J1dirPin = 1;
 const int J2stepPin = 2;
@@ -78,7 +92,7 @@ const int J6stepPin = 10;
 const int J6dirPin = 11;
 const int J7stepPin = 12;
 const int J7dirPin = 13;
-const int J8stepPin = 32;
+const int J8stepPin = 39;
 const int J8dirPin = 33;
 const int J9stepPin = 34;
 const int J9dirPin = 35;
@@ -94,7 +108,7 @@ const int J8calPin = 37;
 const int J9calPin = 38;
 
 
-const int Input39 = 39;
+//const int Input39 = 39;
 
 const int Output40 = 40;
 const int Output41 = 41;
@@ -1263,6 +1277,54 @@ void updatePos() {
 }
 
 
+void syncStepsToEncoders() {
+  long e1 = J1encPos.read();
+  long e2 = J2encPos.read();
+  long e3 = J3encPos.read();
+  long e4 = J4encPos.read();
+  long e5 = J5encPos.read();
+  long e6 = J6encPos.read();
+
+  J1StepM = e1 / J1encMult;
+  J2StepM = e2 / J2encMult;
+  J3StepM = e3 / J3encMult;
+  J4StepM = e4 / J4encMult;
+  J5StepM = e5 / J5encMult;
+  J6StepM = e6 / J6encMult;
+}
+
+void syncRobotPosFromEncoders () {
+  // Sync internal step/angle state to the encoder-derived joint positions.
+  // This is used after a soft E-stop so the controller doesn't drift if any steps were missed.
+  long e1 = J1encPos.read();
+  long e2 = J2encPos.read();
+  long e3 = J3encPos.read();
+  long e4 = J4encPos.read();
+  long e5 = J5encPos.read();
+  long e6 = J6encPos.read();
+
+  J1StepM = e1 / J1encMult;
+  J2StepM = e2 / J2encMult;
+  J3StepM = e3 / J3encMult;
+  J4StepM = e4 / J4encMult;
+  J5StepM = e5 / J5encMult;
+  J6StepM = e6 / J6encMult;
+
+  JangleIn[0] = (J1StepM - J1zeroStep) / J1StepDeg;
+  JangleIn[1] = (J2StepM - J2zeroStep) / J2StepDeg;
+  JangleIn[2] = (J3StepM - J3zeroStep) / J3StepDeg;
+  JangleIn[3] = (J4StepM - J4zeroStep) / J4StepDeg;
+  JangleIn[4] = (J5StepM - J5zeroStep) / J5StepDeg;
+  JangleIn[5] = (J6StepM - J6zeroStep) / J6StepDeg;
+
+  // Keep aux axes consistent too (these are step-derived in this firmware)
+  J7_pos = (J7StepM - J7zeroStep) / J7StepDeg;
+  J8_pos = (J8StepM - J8zeroStep) / J8StepDeg;
+  J9_pos = (J9StepM - J9zeroStep) / J9StepDeg;
+
+  //SolveFowardKinematic();
+}
+
 
 void correctRobotPos () {
 
@@ -2101,10 +2163,26 @@ void driveMotorsJ(int J1step, int J2step, int J3step, int J4step, int J5step, in
     curDelay = calcACCstartDel;
   }
 
-  ///// DRIVE MOTORS /////
+
+  // Soft E-stop decel support
+  bool estopBraking = false;
+  unsigned long estopBrakeStart = 0;
+///// DRIVE MOTORS /////
   while (J1cur < J1step || J2cur < J2step || J3cur < J3step || J4cur < J4step || J5cur < J5step || J6cur < J6step || J7cur < J7step || J8cur < J8step || J9cur < J9step)
   {
-
+    // Soft E-stop: ramp down step rate briefly, then stop stepping (hold torque)
+    if (estop_latched) {
+      if (!estopBraking) {
+        estopBraking = true;
+        estopBrakeStart = micros();
+      }
+      // Increase delay to reduce speed smoothly
+      curDelay = (curDelay * 1.08f) + 5.0f;
+      // Stop stepping after a short braking window
+      if ((micros() - estopBrakeStart) > 200000UL || curDelay > 60000.0f) {
+        return;
+      }
+    }
     ////DELAY CALC/////
     if (highStepCur <= ACCStep) {
       curDelay = curDelay - (calcACCstepInc);
@@ -3112,10 +3190,26 @@ void driveMotorsL(int J1step, int J2step, int J3step, int J4step, int J5step, in
   J5collisionTrue = 0;
   J6collisionTrue = 0;
 
-  ///// DRIVE MOTORS /////
+
+  // Soft E-stop decel support
+  bool estopBraking = false;
+  unsigned long estopBrakeStart = 0;
+///// DRIVE MOTORS /////
   while (J1cur < J1step || J2cur < J2step || J3cur < J3step || J4cur < J4step || J5cur < J5step || J6cur < J6step || J7cur < J7step || J8cur < J8step || J9cur < J9step)
   {
-
+    // Soft E-stop: ramp down step rate briefly, then stop stepping (hold torque)
+    if (estop_latched) {
+      if (!estopBraking) {
+        estopBraking = true;
+        estopBrakeStart = micros();
+      }
+      // Increase delay to reduce speed smoothly
+      curDelay = (curDelay * 1.08f) + 5.0f;
+      // Stop stepping after a short braking window
+      if ((micros() - estopBrakeStart) > 200000UL || curDelay > 60000.0f) {
+        return;
+      }
+    }
     float distDelay = 60;
     float disDelayCur = 0;
 
@@ -3931,9 +4025,20 @@ void shiftCMDarray() {
 //MAIN
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// Soft E-stop interrupt: set request flag (do minimal work in ISR)
+void estopISR() {
+  estop_latched = true; // latch immediately even if we're inside a blocking move
+}
+
 void setup() {
   // run once:
-  Serial.begin(9600);
+  // faster speed to reduce Serial latency
+  Serial.begin(115200);
+
+  // Soft E-stop input (firmware hold-stop)
+  pinMode(ESTOP_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ESTOP_PIN), estopISR, RISING);
+
 
 
   pinMode(J1stepPin, OUTPUT);
@@ -3966,7 +4071,7 @@ void setup() {
   pinMode(J9calPin, INPUT);
 
 
-  pinMode(Input39, INPUT_PULLUP);
+  //pinMode(Input39, INPUT_PULLUP);
 
 
   pinMode(Output40, OUTPUT);
@@ -4001,6 +4106,95 @@ void loop() {
 
   ////////////////////////////////////
   ///////////start loop///////////////
+
+// ---------------- Soft E-stop handling ----------------
+// Fail-safe: with NC->GND + INPUT_PULLUP, a pressed E-stop (or broken wire) reads HIGH.
+if (digitalRead(ESTOP_PIN) == HIGH) {
+  estop_latched = true;
+}
+
+// One-shot actions when E-stop first latches (clear buffers, report not-busy, etc.)
+if (estop_latched && !estop_handled) {
+  estop_handled = true;
+  robotBusy = false; // make sure UI/host sees we're stopped
+
+  // Clear any buffered commands to prevent "resume" surprises
+  cmdBuffer1 = "";
+  cmdBuffer2 = "";
+  cmdBuffer3 = "";
+  recData = "";
+  inData = "";
+
+  Serial.println("!! ESTOP LATCHED (soft hold-stop) !!");
+}
+
+// If E-stop is active, only allow the ER command to clear it.
+// We still call processSerial() so the host can send ER.
+if (estop_latched) {
+  processSerial();
+
+  if (cmdBuffer1 != "") {
+    String tmp = cmdBuffer1;
+    tmp.trim();
+    String fn = tmp.substring(0, 2);
+
+    if (fn == "ER") {
+      // Clear E-stop latch (and resync internal position from encoders)
+      // This prevents "lost step" drift after an abrupt stop.
+      robotBusy = false;
+      //estop_request = false;
+
+      // Stop any residual motion intent
+      speedViolation = "0";
+      flag = "";
+      // Ensure step/angle state matches the encoders before resuming
+      syncRobotPosFromEncoders();
+
+      estop_latched = false;
+
+
+      estop_handled = false;
+      // Clear buffers
+      cmdBuffer1 = "";
+      cmdBuffer2 = "";
+      cmdBuffer3 = "";
+      recData = "";
+      inData = "";
+
+      Serial.println("ESTOP CLEARED (SYNCED)");
+    }
+    //----- Query Robot Status  ---------------------------------------------------
+    //-----------------------------------------------------------------------
+    else if (function == "QS")
+    {
+      // Status query (single-line): keep legacy BUSY/IDLE first, add ESTOP flag for GUI
+      Serial.print(robotBusy ? "BUSY" : "IDLE");
+      Serial.print(" ESTOP=");
+      Serial.println(estop_latched ? "1" : "0");
+    }
+    else if (function == "QE")
+    {
+      // Query E-stop state only
+      Serial.print("ESTOP=");
+      Serial.println(estop_latched ? "1" : "0");
+    }
+    else
+    {
+      // Ignore everything else while latched
+      cmdBuffer1 = "";
+      cmdBuffer2 = "";
+      cmdBuffer3 = "";
+      recData = "";
+      inData = "";
+      Serial.println("!! ESTOP ACTIVE - SEND ER TO CLEAR !!");
+    }
+  }
+
+  // Skip the rest of loop while latched
+  return;
+}
+// ------------------------------------------------------
+
 
   if (splineEndReceived == false) {
     processSerial();

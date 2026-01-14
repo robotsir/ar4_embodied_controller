@@ -77,6 +77,279 @@ import pickle
 import serial
 import time
 import threading
+
+
+# # Global flag to kill thread cleanly on exit
+# running = True 
+# ser = None
+
+# def serial_listener_thread():
+#     """ Runs in background, constantly reading from Teensy """
+#     global running
+#     while running:
+#         try:
+#             if ser is not None and ser.is_open and ser.in_waiting:
+#                 # Read and clean the line
+#                 line = ser.readline().decode('utf-8').strip()
+                
+#                 print(f"Received: {line}")  # Optional: log all incoming lines for debugging
+
+#                 # --- STRICT VALIDATION ---
+#                 # The AR4 C++ code always starts the string with "A" 
+#                 # and includes all joints up to "F".
+#                 required_joints = ["B", "C", "D", "E", "F"]
+#                 if line.startswith("A") and all(char in line for char in required_joints):
+#                     # It is a valid position string -> Update GUI
+#                     root.after(0, displayPosition, line)
+#                     # process_robot_response(line)
+                
+#                 # Optional: Handle other specific messages (like "Done") separately
+#                 # to keep them away from the displayPosition parser.
+#                 elif "Done" in line or "Ready" in line:
+#                     print(f"Robot Status: {line}")
+#             else:
+#                 # Sleep tiny amount to save CPU
+#                 time.sleep(0.01)
+#         except Exception as e:
+#             print(f"Serial Listen Error: {e}")
+
+# import re
+# # Regex explanation:
+# # ([A-Z])       -> Capture Group 1: Any single Capital Letter (The Key)
+# # ([-\d\.]+)    -> Capture Group 2: Any combination of minus signs, digits, and dots (The Value)
+# ROBOT_MSG_PATTERN = re.compile(r"([A-Z])([-\d\.]+)")
+
+# def process_robot_response(line):
+#     """
+#     Parses the "A...B...C..." string from Teensy.
+#     Runs in the background thread.
+#     """
+#     # 1. Parse the line into a clean dictionary
+#     # Example input: "A10.00B20.00M0" -> {'A': 10.0, 'B': 20.0, 'M': 0.0}
+#     data = {}
+    
+#     # This loop finds every "Letter+Number" pair in the line
+#     for key, val_str in ROBOT_MSG_PATTERN.findall(line):
+#         try:
+#             data[key] = float(val_str)
+#         except ValueError:
+#             pass # Ignore non-numeric values if any occur
+            
+#     # 2. Check for specific flags based on your C++ code
+#     # 'M' is speedViolation. If it's 1, we should warn.
+#     if data.get('M', 0) == 1:
+#         print("WARNING: Speed Violation Detected!")
+
+#     # 3. Schedule the GUI update
+#     # We pass the 'data' dict to the main thread
+#     if data:
+#         root.after(0, update_gui_positions, data)
+#         # displayPosition(line)  # Existing function to display full position string
+
+# def update_gui_positions(data):
+#     """
+#     Updates Tkinter Entry fields.
+#     Runs on the Main UI Thread.
+#     """
+#     # Helper function to update a single field safely
+#     def set_field(entry_widget, value):
+#         entry_widget.delete(0, 'end')
+#         entry_widget.insert(0, str(value))
+
+#     # Update Joints 1-6 (A-F)
+#     if 'A' in data: set_field(J1curAngEntryField, data['A'])
+#     if 'B' in data: set_field(J2curAngEntryField, data['B'])
+#     if 'C' in data: set_field(J3curAngEntryField, data['C'])
+#     if 'D' in data: set_field(J4curAngEntryField, data['D'])
+#     if 'E' in data: set_field(J5curAngEntryField, data['E'])
+#     if 'F' in data: set_field(J6curAngEntryField, data['F'])
+
+#     # Update Track/Aux Joints (P, Q, R) if you have fields for them
+#     # Based on your C++: P=J7, Q=J8, R=J9
+#     # if 'P' in data: set_field(TrackCurEntryField, data['P']) 
+    
+#     # # Optional: Visual Feedback for errors
+#     # if 'M' in data and data['M'] > 0:
+#     #     # Change background to red if Speed Violation
+#     #     J1curEntryField.config(bg='red')
+#     # else:
+#     #     # Restore white background
+#     #     J1curEntryField.config(bg='white')
+
+
+# ---------------- Soft E-Stop GUI/Comms integration ----------------
+# Latched E-Stop state (set from Teensy messages). Volatile/ISR concerns are on the Teensy;
+# on the PC side we just keep a normal boolean.
+estop_latched_gui = False
+
+def _set_estop_gui(state: bool, msg=None):
+    """Update latched E-stop state + UI (thread-safe)."""
+    global estop_latched_gui
+    if estop_latched_gui == state:
+        return
+    estop_latched_gui = state
+
+    def _ui_update():
+        # Update status labels if they exist yet
+        try:
+            if state:
+                if msg is None:
+                    m = "SOFT E-STOP ACTIVE"
+                else:
+                    m = msg
+                if 'almStatusLab' in globals():
+                    almStatusLab.config(text=m, style="Alarm.TLabel")
+                if 'almStatusLab2' in globals():
+                    almStatusLab2.config(text=m, style="Alarm.TLabel")
+                if 'estopStatusLab' in globals():
+                    estopStatusLab.config(text="E-STOP", style="Alarm.TLabel")
+                if 'estopResetBut' in globals():
+                    estopResetBut.state(['!disabled'])
+            else:
+                if 'estopStatusLab' in globals():
+                    estopStatusLab.config(text="OK", style="OK.TLabel")
+                # Keep reset button always enabled; firmware decides if ER can clear.
+                if 'estopResetBut' in globals():
+                    estopResetBut.state(['!disabled'])
+        except Exception:
+            pass
+
+    # We may be in a background thread (serial read). Use Tk thread via after().
+    try:
+        root.after(0, _ui_update)
+    except Exception:
+        # root may not exist yet; ignore
+        pass
+
+def _parse_estop_from_text(line: str):
+    """Look for firmware prints that indicate E-stop state.
+    Supports both human-readable messages (ESTOP ACTIVE/CLEARED) and query replies (ESTOP=0/1).
+    """
+    u = line.upper()
+
+    # Query-style replies: e.g. "IDLE ESTOP=0" or "ESTOP=1"
+    if "ESTOP=1" in u:
+        _set_estop_gui(True, "SOFT E-STOP ACTIVE")
+        return
+    if "ESTOP=0" in u:
+        _set_estop_gui(False, "SYSTEM READY")
+        return
+
+    # # Human-readable prints
+    # if ("ESTOP ACTIVE" in u) or ("E-STOP ACTIVE" in u) or ("!! ESTOP" in u) or ("!! E-STOP" in u):
+    #     _set_estop_gui(True, "SOFT E-STOP ACTIVE")
+    # elif ("ESTOP CLEARED" in u) or ("E-STOP CLEARED" in u) or ("CLEARED (SYNCED)" in u):
+    #     _set_estop_gui(False, "SYSTEM READY")
+
+class SafeSerial:
+    """Thin wrapper around pyserial.Serial that:
+      - Parses Teensy output for E-stop messages to latch GUI state
+      - Blocks motion commands while E-stop is latched (still allows ER and S)
+    """
+    def __init__(self, inner):
+        self._s = inner
+
+    def write(self, data: bytes):
+        try:
+            # Allow clearing / stop commands even when latched
+            d = data.strip().upper()
+            allow_prefixes = (b"ER", b"S", b"RE", b"SE", b"TL", b"RP", b"QS", b"QE")
+            if estop_latched_gui and not d.startswith(allow_prefixes):
+                # Block motion / config commands while latched
+                motion_prefixes = (b"MJ", b"ML", b"RJ", b"MV", b"LT")
+                if d.startswith(motion_prefixes) or len(d) > 0:
+                    # Drop the command silently; optionally log
+                    try:
+                        cmdSentEntryField.delete(0, 'end')
+                        cmdSentEntryField.insert(0, "BLOCKED (E-STOP): " + data.decode('utf-8', errors='ignore').strip())
+                    except Exception:
+                        pass
+                    return 0
+        except Exception:
+            pass
+        return self._s.write(data)
+
+    def readline(self, *args, **kwargs):
+        b = self._s.readline(*args, **kwargs)
+        if b:
+            try:
+                _parse_estop_from_text(b.decode('utf-8', errors='replace').strip())
+            except Exception:
+                pass
+        return b
+
+    # pass-through helpers used throughout AR4.py
+    def read(self, *args, **kwargs): return self._s.read(*args, **kwargs)
+    def close(self): return self._s.close()
+    def flush(self): return self._s.flush()
+    def flushInput(self): 
+        # pyserial supports reset_input_buffer; existing code uses flushInput
+        try:
+            return self._s.reset_input_buffer()
+        except Exception:
+            try:
+                return self._s.flushInput()
+            except Exception:
+                return None
+    def reset_input_buffer(self): return self._s.reset_input_buffer()
+    def reset_output_buffer(self): return self._s.reset_output_buffer()
+    @property
+    def in_waiting(self): return self._s.in_waiting
+    def __getattr__(self, name):  # delegate anything else
+        return getattr(self._s, name)
+
+def reset_estop_cmd():
+    """Send E-stop reset to Teensy (ER).
+
+    Important: after a soft E-stop, the Teensy keeps its encoder-based joint state.
+    We should NOT blast the GUI state to zeros. Instead, once cleared, re-sync the
+    GUI by requesting position (RP) and then run any non-motion startup steps.
+    """
+    global ser
+    try:
+        if 'ser' in globals() and ser:
+            # Send reset
+            ser.write(b"ER\n")
+
+            # Update command display (if present)
+            try:
+                cmdSentEntryField.delete(0, 'end')
+                cmdSentEntryField.insert(0, "ER")
+            except Exception:
+                pass
+
+            # Re-query state; if cleared, re-sync GUI pose using RP.
+            st = query_estop_state(timeout_s=1.0)
+            if st == 0:
+                try:
+                    _set_estop_gui(False)
+                except Exception:
+                    pass
+                # Ask Teensy for current pose (encoder-truth) WITHOUT flushing the reply
+                try:
+                    requestPos()
+                except Exception:
+                    pass
+                # Run lightweight startup steps that do not move the robot.
+                # (toolFrame/calExtAxis/sendPos are non-motion; requestPos already called)
+                try:
+                    toolFrame()
+                    calExtAxis()
+                    sendPos()
+                except Exception:
+                    pass
+            else:
+                # Still estopped (button still pressed/open circuit)
+                try:
+                    almStatusLab.config(text="SOFT E-STOP ACTIVE", style="Alarm.TLabel")
+                    almStatusLab2.config(text="SOFT E-STOP ACTIVE", style="Alarm.TLabel")
+                except Exception:
+                    pass
+    except Exception:
+        pass
+# -
+
+# -------------------------------------------------------------------
 import math
 import tkinter.messagebox
 import webbrowser
@@ -115,6 +388,58 @@ if sys.platform.startswith("linux"):
         return _orig_place(self, **kw)
 
     tk.Widget.place = place_scaled
+
+def query_estop_state(timeout_s: float = 1.0):
+    """Query Teensy for current E-stop state.
+    Sends QE and looks for 'ESTOP=0' or 'ESTOP=1' in replies.
+    Returns:
+        0 if not estopped, 1 if estopped, None if no definitive reply.
+    Also updates GUI latch via _parse_estop_from_text().
+    """
+    global ser
+    if 'ser' not in globals() or ser is None:
+        return None
+
+    # Best practice: only clear input BEFORE sending, never after (to avoid dropping replies)
+    try:
+        ser.reset_input_buffer()
+    except Exception:
+        try:
+            ser.flushInput()
+        except Exception:
+            pass
+
+    try:
+        ser.write(b"QE\n")
+    except Exception:
+        return None
+
+    deadline = time.time() + float(timeout_s)
+    state = None
+    while time.time() < deadline:
+        try:
+            b = ser.readline()
+        except Exception:
+            break
+        if not b:
+            continue
+        line = b.decode('utf-8', errors='replace').strip()
+        if not line:
+            continue
+        try:
+            _parse_estop_from_text(line)
+        except Exception:
+            pass
+        u = line.upper()
+        if "ESTOP=1" in u:
+            state = 1
+            break
+        if "ESTOP=0" in u:
+            state = 0
+            break
+
+    return state
+
 def S(v): return int(round(v * UI_SCALE))
 def FS(pt): return int(round(pt * UI_SCALE))
 
@@ -351,10 +676,28 @@ def setCom():
 
     Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
     tab6.ElogView.insert(END, Curtime+" - COMMUNICATIONS STARTED WITH TEENSY 4.1 CONTROLLER")
-    value=tab6.ElogView.get(0,END)
-    pickle.dump(value,open("ErrorLog","wb"))
-    time.sleep(1)
-    ser.flushInput()
+    value = tab6.ElogView.get(0, END)
+    pickle.dump(value, open("ErrorLog", "wb"))
+
+
+
+    
+    if st == 1 or estop_latched_gui:
+        # Connected, but E-stop latched: keep comms alive, block motion, allow ER/QE/QS.
+
+
+        almStatusLab.config(text="SOFT E-STOP ACTIVE", style="Alarm.TLabel")
+        almStatusLab2.config(text="SOFT E-STOP ACTIVE", style="Alarm.TLabel")
+        Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
+        tab6.ElogView.insert(END, Curtime+" - CONNECTED BUT SOFT E-STOP IS ACTIVE (SKIPPED STARTUP)")
+        value = tab6.ElogView.get(0, END)
+        pickle.dump(value, open("ErrorLog", "wb"))
+        return
+
+    # Normal boot: run existing startup handshake
+    almStatusLab.config(text="SYSTEM READY", style="OK.TLabel")
+    almStatusLab2.config(text="SYSTEM READY", style="OK.TLabel")
+
     startup()
   except:
     almStatusLab.config(text="UNABLE TO ESTABLISH COMMUNICATIONS WITH TEENSY 4.1 CONTROLLER", style="Alarm.TLabel")
@@ -5655,12 +5998,51 @@ def correctPos():
   displayPosition(response) 
 
 def requestPos():
+  """Request the current robot pose from the controller.
+
+  NOTE: The original AR4 GUI used `ser.flushInput()` after every write.
+  That can accidentally discard the *reply* if the Teensy responds quickly
+  (common right after an E-stop reset), which then causes displayPosition()
+  to parse an empty/partial line and show zeros.
+
+  Here we **do not** flush the input buffer after sending RP. Instead we
+  read until we get a non-empty line (bounded by a short deadline).
+  """
   command = "RP\n"
-  ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = str(ser.readline().strip(),'utf-8')
-  displayPosition(response) 
+  #ser.flushInput()
+  ser.reset_input_buffer()  # clear any stale input BEFORE sending
+  ser.write(command.encode())
+
+  # Read a valid reply line. Keep it short so UI remains responsive.
+  deadline = time.time() + 1.0
+  while time.time() < deadline:
+    try:
+      response = str(ser.readline().strip(), 'utf-8')
+    except Exception:
+      response = ""
+    if response:
+
+      print("RP got line:", repr(response))   # <-- debug
+
+      if response.startswith("A"):
+        displayPosition(response)
+        return
+
+        # ignore non-pose lines like: ESTOP=0, IDLE..., alarms, etc.    
+
+    time.sleep(0.01)
+  # No reply: keep previous GUI state (don't overwrite with zeros).
+  print("RP timed out (no pose line)")
+  return
+
+  # command = "RP\n"
+  # ser.flushInput()
+  # ser.write(command.encode())    
+  # time.sleep(.2)
+  # response = str(ser.readline().strip(),'utf-8')
+  # displayPosition(response) 
+
+
 
 def toolFrame():
   TFx  = TFxEntryField.get()
@@ -5670,8 +6052,9 @@ def toolFrame():
   TFry = TFryEntryField.get()
   TFrx = TFrxEntryField.get()
   command = "TF"+"A"+TFx+"B"+TFy+"C"+TFz+"D"+TFrz+"E"+TFry+"F"+TFrx+"\n"
-  ser.write(command.encode())    
   ser.flushInput()
+  ser.write(command.encode())    
+
   time.sleep(.2)
   response = ser.read()
 
@@ -5697,8 +6080,10 @@ def calExtAxis():
   J9jogslide.config(from_=-J9axisLimNeg, to=J9axisLimPos,  length=125, orient=HORIZONTAL,  command=J9sliderUpdate)
 
   command = "CE"+"A"+str(J7axisLimPos)+"B"+str(J7rotation)+"C"+str(J7steps)+"D"+str(J8axisLimPos)+"E"+str(J8rotation)+"F"+str(J8steps)+"G"+str(J9axisLimPos)+"H"+str(J9rotation)+"I"+str(J9steps)+"\n"
-  ser.write(command.encode())    
   ser.flushInput()
+  
+  ser.write(command.encode())    
+  
   time.sleep(.2)
   response = ser.read()
 
@@ -5750,18 +6135,19 @@ def zeroAxis9():
 
 def sendPos():
   command = "SP"+"A"+str(J1AngCur)+"B"+str(J2AngCur)+"C"+str(J3AngCur)+"D"+str(J4AngCur)+"E"+str(J5AngCur)+"F"+str(J6AngCur)+"G"+str(J7PosCur)+"H"+str(J8PosCur)+"I"+str(J9PosCur)+"\n"
-  ser.write(command.encode())    
   ser.flushInput()
+  ser.write(command.encode())    
   time.sleep(.2)
   response = ser.read()
 
 def CalZeroPos():
   Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
   command = "SPA0B0C0D0E0F0\n"
+  ser.reset_input_buffer()
   ser.write(command.encode())    
-  ser.flushInput()
-  time.sleep(.2)
-  response = ser.read()
+  # ser.flushInput()
+  # time.sleep(.2)
+  # response = ser.read()
   requestPos()
   almStatusLab.config(text="Calibration Forced to Zero", style="Warn.TLabel")
   almStatusLab2.config(text="Calibration Forced to Zero", style="Warn.TLabel")
@@ -7269,7 +7655,7 @@ def motion(event):
       VisY2PixEntryField.insert(0,y)
 
     #print(str(x) +","+str(y))
-    
+
 
 def checkAutoBG():
   autoBGVal = int(autoBG.get())
@@ -7279,23 +7665,16 @@ def checkAutoBG():
     VisBacColorEntryField.configure(state='enabled')  
 
 
-
-
-
-  
 ####################################################################################################################################################
 ####################################################################################################################################################
 ####################################################################################################################################################
 #####TAB 1
 
 
-
-  
-
 ###LABELS#################################################################
 ##########################################################################
 
-CartjogFrame = Frame(tab1, width=1536, height=792,)
+CartjogFrame = Frame(tab1, width=S(1536), height=S(792))
 CartjogFrame.place(x=330, y=0)
 
 curRowLab = Label(tab1, text = "Current Row:")
@@ -7304,6 +7683,15 @@ curRowLab.place(x=98, y=120)
 
 almStatusLab = Label(tab1, text = "SYSTEM READY - NO ACTIVE ALARMS", style="OK.TLabel")
 almStatusLab.place(x=25, y=12)
+# Soft E-stop indicator + reset button (uses Teensy "ER" command)
+estopStatusLabText = Label(tab1, text = "E-Stop Status:")
+estopStatusLabText.place(x=345, y=12)
+estopStatusLab = Label(tab1, text="OK", style="OK.TLabel")
+estopStatusLab.place(x=420, y=12)
+estopResetBut = ttk.Button(tab1, text="Reset E-Stop", command=reset_estop_cmd)
+estopResetBut.place(x=470, y=8)
+# Keep enabled; it's safe to send ER any time (firmware will ignore/no-op if not estopped)
+estopResetBut.state(['!disabled'])
 
 xbcStatusLab = Label(tab1, text = "Xbox OFF")
 xbcStatusLab.place(x=1270, y=80)
@@ -7312,14 +7700,11 @@ runStatusLab = Label(tab1, text = "PROGRAM STOPPED")
 runStatusLab.place(x=20, y=150)
 
 
-
-
-
 ProgLab = Label(tab1, text = "Program:")
 ProgLab.place(x=10, y=45)
 
 jogIncrementLab = Label(tab1, text = "Increment Value:")
-#jogIncrementLab.place(x=370, y=45)
+# jogIncrementLab.place(x=370, y=45)
 
 speedLab = Label(tab1, text = "Speed")
 speedLab.place(x=300, y=83)
@@ -7335,8 +7720,6 @@ DECLab.place(x=300, y=143)
 
 RoundLab = Label(tab1, text = "Rounding               mm")
 RoundLab.place(x=525, y=82)
-
-
 
 
 XLab = Label(CartjogFrame, font=("Arial", 18), text = " X")
