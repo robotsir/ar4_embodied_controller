@@ -115,19 +115,20 @@ const int Output41 = 41;
 
 
 //set encoder multiplier
-const float J1encMult = 10;
-const float J2encMult = 10;
-const float J3encMult = 10;
-const float J4encMult = 10;
-const float J5encMult = 5;
-const float J6encMult = 10;
+const float J1encMult = 5.12;
+const float J2encMult = 5.12;
+const float J3encMult = 5.12;
+const float J4encMult = 5.12;
+const float J5encMult = 2.56;
+const float J6encMult = 5.12;
+
 
 //set encoder pins
 Encoder J1encPos(14, 15);
-Encoder J2encPos(17, 16);
-Encoder J3encPos(19, 18);
+Encoder J2encPos(16, 17);
+Encoder J3encPos(18, 19);
 Encoder J4encPos(20, 21);
-Encoder J5encPos(23, 22);
+Encoder J5encPos(22, 23);
 Encoder J6encPos(24, 25);
 
 
