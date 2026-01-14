@@ -55,7 +55,6 @@
 ##########################################################################
 
 
-
 from multiprocessing.resource_sharer import stop
 from os import execv
 from tkinter import *
@@ -66,7 +65,13 @@ from ttkthemes import ThemedStyle
 from tkinter import messagebox
 from PIL import Image, ImageTk
 from matplotlib import pyplot as plt
-from pygrabber.dshow_graph import FilterGraph
+import sys
+
+if sys.platform.startswith("win"):
+    from pygrabber.dshow_graph import FilterGraph
+else:
+    FilterGraph = None
+
 
 import pickle
 import serial
@@ -77,7 +82,11 @@ import tkinter.messagebox
 import webbrowser
 import numpy as np
 import datetime
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 import pathlib
 import os
 from numpy import mean
@@ -88,11 +97,66 @@ cropping = False
 
 
 root = Tk()
+
+import tkinter as tk
+# Only apply on Linux
+UI_SCALE = 1.00
+
+
+if sys.platform.startswith("linux"):
+    UI_SCALE = 1.25  # try 1.15 / 1.25 / 1.35
+
+    _orig_place = tk.Widget.place
+
+    def place_scaled(self, **kw):
+        for k in ("x", "y", "width", "height"):
+            if k in kw and isinstance(kw[k], (int, float)):
+                kw[k] = int(round(kw[k] * UI_SCALE))
+        return _orig_place(self, **kw)
+
+    tk.Widget.place = place_scaled
+def S(v): return int(round(v * UI_SCALE))
+def FS(pt): return int(round(pt * UI_SCALE))
+
+from tkinter import font
+from ttkthemes import ThemedStyle
+
+# Don't force tk scaling on Linux; let Tk pick based on DPI
+# (remove the print/before/after and the scaling=3.0 line)
+
+default_font = font.nametofont("TkDefaultFont")
+default_font.configure(size=10)   # try 10 or 11 on 1440p
+root.option_add("*Font", default_font)
+
+style = ThemedStyle(root)
+style.set_theme("clam")
+style.configure(".", font=default_font)
+
+# Give a sane initial window size on 2560x1440
+# sw = root.winfo_screenwidth()
+# sh = root.winfo_screenheight()
+# w = min(1600, sw)
+# h = min(900, sh)
+# root.geometry(f"{w}x{h}+0+0")
+
+
+
+
 root.wm_title("AR4 Software Ver 3.0")
-root.iconbitmap(r'AR.ico')
+if sys.platform.startswith("win"):
+    root.iconbitmap("AR.ico")
 root.resizable(width=False, height=False)
-root.geometry('1536x792+0+0')
+
+BASE_W = 1536
+BASE_H = 792
+
+W = int(BASE_W * UI_SCALE)
+H = int(BASE_H * UI_SCALE)
+
+root.geometry(f"{W}x{H}+0+0")
+
 root.runTrue = 0
+
 
 def on_closing():
     #if messagebox.askokcancel("Close Program", "Do you want to quit?"):
@@ -207,8 +271,8 @@ J6axisLim = J6axisLimPos + J6axisLimNeg;
 ### DEFINE TABS ############################################################
 ############################################################################
 
-nb = tkinter.ttk.Notebook(root, width=1536, height=792)
-nb.place(x=0, y=0)
+nb = tkinter.ttk.Notebook(root)
+nb.place(x=0, y=0, relwidth=1.0, relheight=1.0)
 
 tab1 = tkinter.ttk.Frame(nb)
 nb.add(tab1, text=' Main Controls ')
@@ -252,19 +316,39 @@ def startup():
   requestPos()
 
 
-
 ###############################################################################################################################################################
 ### COMMUNICATION DEFS ################################################################################################################# COMMUNICATION DEFS ###
 ###############################################################################################################################################################
 
-def setCom(): 
+def setCom():
   try:
-    global ser    
-    port = "COM" + comPortEntryField.get()  
-    baud = 9600    
-    ser = serial.Serial(port,baud)
-    almStatusLab.config(text="SYSTEM READY", style="OK.TLabel")
-    almStatusLab2.config(text="SYSTEM READY", style="OK.TLabel")
+    global ser
+    if sys.platform.startswith("win"):
+        port = "COM" + comPortEntryField.get()
+    else:
+        port = "/dev/serial/by-id/usb-Teensyduino_USB_Serial_11564850-if00"
+
+    baud = 115200
+    ser_inner = serial.Serial(port, baud, timeout=1.0)
+
+    # Give the Teensy a brief moment to enumerate/reset, then clear any boot chatter
+    time.sleep(0.25)
+    try:
+        ser_inner.reset_input_buffer()
+    except Exception:
+        try:
+            ser_inner.flushInput()
+        except Exception:
+            pass
+
+    ser = SafeSerial(ser_inner)
+
+    # Send reset just in case, it shouldn't hurt
+    #ser.write(b"ER\n")
+
+    # Query E-stop state immediately. If estopped, DO NOT run startup() (it will hang/fail).
+    st = query_estop_state(timeout_s=1.0)
+
     Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
     tab6.ElogView.insert(END, Curtime+" - COMMUNICATIONS STARTED WITH TEENSY 4.1 CONTROLLER")
     value=tab6.ElogView.get(0,END)
@@ -284,9 +368,13 @@ def setCom():
 def setCom2(): 
   try:
     global ser2    
-    port = "COM" + com2PortEntryField.get()  
+    if sys.platform.startswith("win"):
+        port = "COM" + com2PortEntryField.get()
+    else:
+        port = "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_758303330383513060F0-if00"
+
     baud = 115200    
-    ser2 = serial.Serial(port,baud)
+    ser2 = serial.Serial(port,baud,timeout=10)
     almStatusLab.config(text="SYSTEM READY", style="OK.TLabel")
     almStatusLab2.config(text="SYSTEM READY", style="OK.TLabel")
     Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
@@ -9394,7 +9482,13 @@ VisYpixfoundLab = Label(tab5, text = "Y pixes returned from camera")
 ### 5 BUTTONS################################################################
 #############################################################################
 
-graph = FilterGraph()
+if sys.platform.startswith("win"):
+    graph = FilterGraph()
+    # ... whatever uses graph (list cameras, etc.)
+else:
+    graph = None
+    # optionally: disable camera UI elements or show "not supported on Linux"
+
 try:
   camList = graph.get_input_devices()
 except:
@@ -9404,10 +9498,6 @@ visoptions.set("Select a Camera")
 vismenu=OptionMenu(tab5, visoptions, camList[0], *camList)
 vismenu.config(width=20)
 vismenu.place(x=10, y=10)
-
-
- 
-
 
 
 StartCamBut = Button(tab5,  text="Start Camera",  width=15, command = start_vid)
