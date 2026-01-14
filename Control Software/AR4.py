@@ -542,6 +542,79 @@ def executeRow():
     time.sleep(.2)
     ser2.read() 
 
+    ##Continuous Servo Command##
+    if cmdType == "ServoC":
+        servoIndex = command.find("number ")
+        timeIndex = command.find("time: ")
+        servoNum = str(command[servoIndex + 7 : timeIndex - 1])
+        servoTime = str(command[timeIndex + 6 :])
+
+        # check if it's a register
+        if servoTime[0] == "R":
+            regEntry = servoTime + "EntryField"
+            curRegVal = eval(regEntry).get()
+            servoTime = curRegVal
+            print("use register value as time: " + servoTime)
+
+        if servoTime == "0":
+            # set a default value in case the register wasn't set
+            servoTime = "2"
+            print("use default servoTime value: " + servoTime)
+
+        # convert from second to ms
+        servoTime = str(round(float(servoTime) * 1000))
+
+        command = "SC" + servoNum + "T" + servoTime + "\n"
+        ser2.write(command.encode())
+        ser2.flushInput()
+        time.sleep(0.2)
+        ser2.readline()
+    ##Stepper Motor Command##
+    if cmdType == "Steppe":
+        servoIndex = command.find("number ")
+        posIndex = command.find("position: ")
+        checkLSIndex = command.find("checkLS: ")
+        servoNum = str(command[servoIndex + 7 : posIndex - 4])
+        servoPos = str(command[posIndex + 10 : checkLSIndex - 1])
+        checkLS = str(command[checkLSIndex + 9 :])
+        command = "ST" + servoNum + "P" + servoPos + "LS" + checkLS + "\n"
+        print(command)
+
+        ser2.write(command.encode())
+        ser2.reset_input_buffer()
+
+        time.sleep(0.2)
+        print(ser2.readline())
+
+    ##DC Motor Command##
+    if cmdType == "DCmoto":
+        servoIndex = command.find("number ")
+        posIndex = command.find("position: ")
+        servoNum = str(command[servoIndex + 7 : posIndex - 4])
+        servoPos = str(command[posIndex + 10 :])
+        command = "DC" + servoNum + "P" + servoPos + "\n"
+        # print(command)
+        ser2.write(command.encode())
+        ser2.flushInput()
+        ##time.sleep(0.2)
+        ##print(ser2.readline())
+    ##8 channel Relay Command##
+    if cmdType == "Switch":
+        servoIndex = command.find("number ")
+        posIndex = command.find("position: ")
+        servoNum = str(command[servoIndex + 7 : posIndex - 4])
+        servoPos = str(command[posIndex + 10 :])
+        command = "SW" + servoNum + "P" + servoPos + "\n"
+        # print(command)
+        ser2.write(command.encode())
+        # ser2.flushInput()
+        ##time.sleep(0.2)
+        ##print(ser2.readline())
+        ser2.reset_input_buffer()
+
+        time.sleep(0.2)
+        print(ser2.readline())
+
   ##If Input On Jump to Tab IO Board##
   if (cmdType == "If On "):
     if (moveInProc == 1):
@@ -625,502 +698,768 @@ def executeRow():
       tab1.progView.selection_clear(0, END)
       tab1.progView.select_set(index)
 
-  ##Jump to Row##
-  if (cmdType == "Jump T"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    tabIndex = command.find("Tab-")
-    tabNum = str(command[tabIndex+4:])
-    index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
-    tab1.progView.selection_clear(0, END)
-    tab1.progView.select_set(index)  
-  ##Set Output ON Command IO Board##
-  if (cmdType == "Out On"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    outputIndex = command.find("Out On = ")
-    outputNum = str(command[outputIndex+9:])
-    command = "ONX"+outputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser2.write(command.encode())
-    ser2.flushInput()
-    time.sleep(.2)
-    ser2.read() 
-  ##Set Output OFF Command IO Board##
-  if (cmdType == "Out Of"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    outputIndex = command.find("Out Off = ")
-    outputNum = str(command[outputIndex+10:])
-    command = "OFX"+outputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser2.write(command.encode())
-    ser2.flushInput()
-    time.sleep(.2)
-    ser2.read() 
+    ##Jump to Row##
+    if cmdType == "Jump T":
+        if moveInProc == 1:
+            moveInProc == 2
+        tabIndex = command.find("Tab-")
+        tabNum = str(command[tabIndex + 4 :])
+        index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
+        tab1.progView.selection_clear(0, END)
+        tab1.progView.select_set(index)
+    ##Set Output ON Command IO Board##
+    if cmdType == "Out On":
+        if moveInProc == 1:
+            moveInProc == 2
+        outputIndex = command.find("Out On = ")
+        outputNum = str(command[outputIndex + 9 :])
+        # command = "ONX"+outputNum+"\n"
+        command = "SW" + outputNum + "P" + "1" + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
 
-  ##Set Output ON Command Teensy##
-  if (cmdType == "ToutOn"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    outputIndex = command.find("outOn = ")
-    outputNum = str(command[outputIndex+8:])
-    command = "ONX"+outputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.read() 
-  ##Set Output OFF Command Teensy##
-  if (cmdType == "ToutOf"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    outputIndex = command.find("outOff = ")
-    outputNum = str(command[outputIndex+9:])
-    command = "OFX"+outputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.read() 
+        print(command)
 
-  ##Wait Input ON Command IO Board##
-  if (cmdType == "Wait I"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("Wait Input On = ")
-    inputNum = str(command[inputIndex+16:])
-    command = "WIN"+inputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser2.write(command.encode())
-    ser2.flushInput()
-    time.sleep(.2)
-    ser2.read() 
-  ##Wait Input OFF Command IO Board##
-  if (cmdType == "Wait O"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("Wait Off Input = ")
-    inputNum = str(command[inputIndex+17:])
-    command = "WON"+inputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser2.write(command.encode())
-    ser2.flushInput()
-    time.sleep(.2)
-    ser2.read() 
+        ser2.write(command.encode())
+        # ser2.flushInput()
+        # time.sleep(.2)
+        # ser2.read()
+        ser2.reset_input_buffer()
 
-  ##Wait Input ON Command Teensy##
-  if (cmdType == "TwaitI"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("TwaitInput On = ")
-    inputNum = str(command[inputIndex+16:])
-    command = "WIN"+inputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.read() 
-  ##Wait Input OFF Command Teensy##
-  if (cmdType == "TwaitO"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    inputIndex = command.find("TwaitOff Input = ")
-    inputNum = str(command[inputIndex+16:])
-    command = "WON"+inputNum+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.read()   
+        time.sleep(0.2)
+        # ser2.read() can get stuck sometime
+        print(ser2.readline())
+
+    ##Set Output OFF Command IO Board##
+    if cmdType == "Out Of":
+        if moveInProc == 1:
+            moveInProc == 2
+        outputIndex = command.find("Out Off = ")
+        outputNum = str(command[outputIndex + 10 :])
+        # command = "OFX"+outputNum+"\n"
+        command = "SW" + outputNum + "P" + "0" + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser2.write(command.encode())
+        # ser2.flushInput()
+        # time.sleep(.2)
+        # ser2.read()
+        ser2.reset_input_buffer()
+
+        time.sleep(0.2)
+        print(ser2.readline())
+
+    ##Set Output ON Command Teensy##
+    if cmdType == "ToutOn":
+        if moveInProc == 1:
+            moveInProc == 2
+        outputIndex = command.find("outOn = ")
+        outputNum = str(command[outputIndex + 8 :])
+        command = "ONX" + outputNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.read()
+    ##Set Output OFF Command Teensy##
+    if cmdType == "ToutOf":
+        if moveInProc == 1:
+            moveInProc == 2
+        outputIndex = command.find("outOff = ")
+        outputNum = str(command[outputIndex + 9 :])
+        command = "OFX" + outputNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.read()
+
+    ##Wait Input ON Command IO Board##
+    if cmdType == "Wait I":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("Wait Input On = ")
+        inputNum = str(command[inputIndex + 16 :])
+        command = "WIN" + inputNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser2.write(command.encode())
+        ser2.flushInput()
+        time.sleep(0.2)
+        ser2.read()
+    ##Wait Input OFF Command IO Board##
+    if cmdType == "Wait O":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("Wait Off Input = ")
+        inputNum = str(command[inputIndex + 17 :])
+        command = "WON" + inputNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser2.write(command.encode())
+        ser2.flushInput()
+        time.sleep(0.2)
+        ser2.read()
+
+    ##Wait Input ON Command Teensy##
+    if cmdType == "TwaitI":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("TwaitInput On = ")
+        inputNum = str(command[inputIndex + 16 :])
+        command = "WIN" + inputNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.read()
+    ##Wait Input OFF Command Teensy##
+    if cmdType == "TwaitO":
+        if moveInProc == 1:
+            moveInProc == 2
+        inputIndex = command.find("TwaitOff Input = ")
+        inputNum = str(command[inputIndex + 16 :])
+        command = "WON" + inputNum + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.read()
+
+    ##Wait Time Command##
+    if cmdType == "Wait T":
+        if moveInProc == 1:
+            moveInProc == 2
+        timeIndex = command.find("Wait Time = ")
+        timeSeconds = str(command[timeIndex + 12 :])
+        command = "WTS" + timeSeconds + "\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.read()
+
+    ##Set Register##
+    if cmdType == "Regist":
+        if moveInProc == 1:
+            moveInProc == 2
+        regNumIndex = command.find("Register ")
+        regEqIndex = command.find(" = ")
+        regNumVal = str(command[regNumIndex + 9 : regEqIndex])
+        regEntry = "R" + regNumVal + "EntryField"
+        testOper = str(command[regEqIndex + 3 : regEqIndex + 5])
+        if testOper == "++":
+            regCEqVal = str(command[regEqIndex + 5 :])
+            curRegVal = eval(regEntry).get()
+            regEqVal = str(int(regCEqVal) + int(curRegVal))
+        elif testOper == "--":
+            regCEqVal = str(command[regEqIndex + 5 :])
+            curRegVal = eval(regEntry).get()
+            regEqVal = str(int(curRegVal) - int(regCEqVal))
+        else:
+            regEqVal = str(command[regEqIndex + 3 :])
+        eval(regEntry).delete(0, "end")
+        eval(regEntry).insert(0, regEqVal)
+    ##Set Position Register##
+    if cmdType == "Positi":
+        if moveInProc == 1:
+            moveInProc == 2
+        regNumIndex = command.find("Position Register ")
+        regElIndex = command.find("Element")
+        regEqIndex = command.find(" = ")
+        regNumVal = str(command[regNumIndex + 18 : regElIndex - 1])
+        regNumEl = str(command[regElIndex + 8 : regEqIndex])
+        regEntry = "SP_" + regNumVal + "_E" + regNumEl + "_EntryField"
+        testOper = str(command[regEqIndex + 3 : regEqIndex + 5])
+        if testOper == "++":
+            regCEqVal = str(command[regEqIndex + 4 :])
+            curRegVal = eval(regEntry).get()
+            regEqVal = str(float(regCEqVal) + float(curRegVal))
+        elif testOper == "--":
+            regCEqVal = str(command[regEqIndex + 5 :])
+            curRegVal = eval(regEntry).get()
+            regEqVal = str(float(curRegVal) - float(regCEqVal))
+        else:
+            regEqVal = str(command[regEqIndex + 3 :])
+        eval(regEntry).delete(0, "end")
+        eval(regEntry).insert(0, regEqVal)
+    ##If Register Jump to Row##
+    if cmdType == "If Reg":
+        if moveInProc == 1:
+            moveInProc == 2
+        regIndex = command.find("If Register ")
+        regEqIndex = command.find(" = ")
+        regJmpIndex = command.find(" Jump to Tab ")
+        regNum = str(command[regIndex + 12 : regEqIndex])
+        regEq = str(command[regEqIndex + 3 : regJmpIndex])
+        tabNum = str(command[regJmpIndex + 13 :])
+        regEntry = "R" + regNum + "EntryField"
+        curRegVal = eval(regEntry).get()
+        if curRegVal == regEq:
+            index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
+            tab1.progView.selection_clear(0, END)
+            tab1.progView.select_set(index)
+
+    ##Calibrate Command##
+    if cmdType == "Calibr":
+        if moveInProc == 1:
+            moveInProc == 2
+        calRobotAll()
+        if calStat == 0:
+            stopProg()
+
+    ##Set tool##
+    if cmdType == "Tool S":
+        if moveInProc == 1:
+            moveInProc == 2
+        almStatusLab.config(text="SYSTEM READY", style="OK.TLabel")
+        almStatusLab2.config(text="SYSTEM READY", style="OK.TLabel")
+        xIndex = command.find(" X ")
+        yIndex = command.find(" Y ")
+        zIndex = command.find(" Z ")
+        rzIndex = command.find(" Rz ")
+        ryIndex = command.find(" Ry ")
+        rxIndex = command.find(" Rx ")
+        xVal = command[xIndex + 3 : yIndex]
+        yVal = command[yIndex + 3 : zIndex]
+        zVal = command[zIndex + 3 : rzIndex]
+        rzVal = command[rzIndex + 4 : ryIndex]
+        ryVal = command[ryIndex + 4 : rxIndex]
+        rxVal = command[rxIndex + 4 :]
+        TFxEntryField.delete(0, "end")
+        TFyEntryField.delete(0, "end")
+        TFzEntryField.delete(0, "end")
+        TFrzEntryField.delete(0, "end")
+        TFryEntryField.delete(0, "end")
+        TFrxEntryField.delete(0, "end")
+        TFxEntryField.insert(0, str(xVal))
+        TFyEntryField.insert(0, str(yVal))
+        TFzEntryField.insert(0, str(zVal))
+        TFrzEntryField.insert(0, str(rzVal))
+        TFryEntryField.insert(0, str(ryVal))
+        TFrxEntryField.insert(0, str(rxVal))
+        command = (
+            "TF"
+            + "A"
+            + xVal
+            + "B"
+            + yVal
+            + "C"
+            + zVal
+            + "D"
+            + rzVal
+            + "E"
+            + ryVal
+            + "F"
+            + rxVal
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.read()
+
+    ##Move J Command##
+    if cmdType == "Move J":
+        if moveInProc == 0:
+            moveInProc == 1
+        xIndex = command.find(" X ")
+        yIndex = command.find(" Y ")
+        zIndex = command.find(" Z ")
+        rzIndex = command.find(" Rz ")
+        ryIndex = command.find(" Ry ")
+        rxIndex = command.find(" Rx ")
+        J7Index = command.find(" J7 ")
+        J8Index = command.find(" J8 ")
+        J9Index = command.find(" J9 ")
+        SpeedIndex = command.find(" S")
+        ACCspdIndex = command.find(" Ac ")
+        DECspdIndex = command.find(" Dc ")
+        ACCrampIndex = command.find(" Rm ")
+        WristConfIndex = command.find(" $")
+        xVal = command[xIndex + 3 : yIndex]
+        yVal = command[yIndex + 3 : zIndex]
+        zVal = command[zIndex + 3 : rzIndex]
+        rzVal = command[rzIndex + 4 : ryIndex]
+        ryVal = command[ryIndex + 4 : rxIndex]
+        rxVal = command[rxIndex + 4 : J7Index]
+        J7Val = command[J7Index + 4 : J8Index]
+        J8Val = command[J8Index + 4 : J9Index]
+        J9Val = command[J9Index + 4 : SpeedIndex]
+        speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+        Speed = command[SpeedIndex + 4 : ACCspdIndex]
+        ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+        DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+        ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+        WC = command[WristConfIndex + 3 :]
+        LoopMode = (
+            str(J1OpenLoopStat.get())
+            + str(J2OpenLoopStat.get())
+            + str(J3OpenLoopStat.get())
+            + str(J4OpenLoopStat.get())
+            + str(J5OpenLoopStat.get())
+            + str(J6OpenLoopStat.get())
+        )
+        command = (
+            "MJ"
+            + "X"
+            + xVal
+            + "Y"
+            + yVal
+            + "Z"
+            + zVal
+            + "Rz"
+            + rzVal
+            + "Ry"
+            + ryVal
+            + "Rx"
+            + rxVal
+            + "J7"
+            + J7Val
+            + "J8"
+            + J8Val
+            + "J9"
+            + J9Val
+            + speedPrefix
+            + Speed
+            + "Ac"
+            + ACCspd
+            + "Dc"
+            + DECspd
+            + "Rm"
+            + ACCramp
+            + "W"
+            + WC
+            + "Lm"
+            + LoopMode
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        # ser.read()
+        response = str(ser.readline().strip(), "utf-8")
+        if response[:1] == "E":
+            ErrorHandler(response)
+        else:
+            displayPosition(response)
+
+    ##Offs J Command##
+    if cmdType == "OFF J ":
+        if moveInProc == 0:
+            moveInProc == 1
+        SPnewInex = command.find("[ PR: ")
+        SPendInex = command.find(" ] [")
+        xIndex = command.find(" X ")
+        yIndex = command.find(" Y ")
+        zIndex = command.find(" Z ")
+        rzIndex = command.find(" Rz ")
+        ryIndex = command.find(" Ry ")
+        rxIndex = command.find(" Rx ")
+        J7Index = command.find(" J7 ")
+        J8Index = command.find(" J8 ")
+        J9Index = command.find(" J9 ")
+        SpeedIndex = command.find(" S")
+        ACCspdIndex = command.find(" Ac ")
+        DECspdIndex = command.find(" Dc ")
+        ACCrampIndex = command.find(" Rm ")
+        WristConfIndex = command.find(" $")
+        SP = str(command[SPnewInex + 6 : SPendInex])
+        cx = eval("SP_" + SP + "_E1_EntryField").get()
+        cy = eval("SP_" + SP + "_E2_EntryField").get()
+        cz = eval("SP_" + SP + "_E3_EntryField").get()
+        crz = eval("SP_" + SP + "_E4_EntryField").get()
+        cry = eval("SP_" + SP + "_E5_EntryField").get()
+        crx = eval("SP_" + SP + "_E6_EntryField").get()
+        xVal = str(float(cx) + float(command[xIndex + 3 : yIndex]))
+        yVal = str(float(cy) + float(command[yIndex + 3 : zIndex]))
+        zVal = str(float(cz) + float(command[zIndex + 3 : rzIndex]))
+        rzVal = str(float(crz) + float(command[rzIndex + 4 : ryIndex]))
+        ryVal = str(float(cry) + float(command[ryIndex + 4 : rxIndex]))
+        rxVal = str(float(crx) + float(command[rxIndex + 4 : J7Index]))
+        J7Val = command[J7Index + 4 : J8Index]
+        J8Val = command[J8Index + 4 : J9Index]
+        J9Val = command[J9Index + 4 : SpeedIndex]
+        speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+        Speed = command[SpeedIndex + 4 : ACCspdIndex]
+        ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+        DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+        ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+        WC = command[WristConfIndex + 3 :]
+        LoopMode = (
+            str(J1OpenLoopStat.get())
+            + str(J2OpenLoopStat.get())
+            + str(J3OpenLoopStat.get())
+            + str(J4OpenLoopStat.get())
+            + str(J5OpenLoopStat.get())
+            + str(J6OpenLoopStat.get())
+        )
+        command = (
+            "MJ"
+            + "X"
+            + xVal
+            + "Y"
+            + yVal
+            + "Z"
+            + zVal
+            + "Rz"
+            + rzVal
+            + "Ry"
+            + ryVal
+            + "Rx"
+            + rxVal
+            + "J7"
+            + J7Val
+            + "J8"
+            + J8Val
+            + "J9"
+            + J9Val
+            + speedPrefix
+            + Speed
+            + "Ac"
+            + ACCspd
+            + "Dc"
+            + DECspd
+            + "Rm"
+            + ACCramp
+            + "W"
+            + WC
+            + "Lm"
+            + LoopMode
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        # ser.write(command.encode())
+        # ser.flushInput()
+        # time.sleep(0.2)
+        # response = str(ser.readline().strip(), "utf-8")
+        # if response[:1] == "E":
+        #     ErrorHandler(response)
+        # else:
+        #     displayPosition(response)
 
 
-  ##Wait Time Command##
-  if (cmdType == "Wait T"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    timeIndex = command.find("Wait Time = ")
-    timeSeconds = str(command[timeIndex+12:])
-    command = "WTS"+timeSeconds+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.read() 
 
-  ##Set Register##  
-  if (cmdType == "Regist"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    regNumIndex = command.find("Register ")
-    regEqIndex = command.find(" = ")
-    regNumVal = str(command[regNumIndex+9:regEqIndex])
-    regEntry = "R"+regNumVal+"EntryField"
-    testOper = str(command[regEqIndex+3:regEqIndex+5])
-    if (testOper == "++"):
-      regCEqVal = str(command[regEqIndex+5:])
-      curRegVal = eval(regEntry).get()
-      regEqVal = str(int(regCEqVal)+int(curRegVal))      
-    elif (testOper == "--"):
-      regCEqVal = str(command[regEqIndex+5:])
-      curRegVal = eval(regEntry).get()
-      regEqVal = str(int(curRegVal)-int(regCEqVal))
-    else:
-      regEqVal = str(command[regEqIndex+3:])    
-    eval(regEntry).delete(0, 'end')
-    eval(regEntry).insert(0,regEqVal)
-  ##Set Position Register##  
-  if (cmdType == "Positi"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    regNumIndex = command.find("Position Register ")
-    regElIndex = command.find("Element")
-    regEqIndex = command.find(" = ")
-    regNumVal = str(command[regNumIndex+18:regElIndex-1])
-    regNumEl = str(command[regElIndex+8:regEqIndex])
-    regEntry = "SP_"+regNumVal+"_E"+regNumEl+"_EntryField"
-    testOper = str(command[regEqIndex+3:regEqIndex+5])
-    if (testOper == "++"):
-      regCEqVal = str(command[regEqIndex+4:])
-      curRegVal = eval(regEntry).get()
-      regEqVal = str(float(regCEqVal)+float(curRegVal))      
-    elif (testOper == "--"):
-      regCEqVal = str(command[regEqIndex+5:])
-      curRegVal = eval(regEntry).get()
-      regEqVal = str(float(curRegVal)-float(regCEqVal))
-    else:
-      regEqVal = str(command[regEqIndex+3:])    
-    eval(regEntry).delete(0, 'end')
-    eval(regEntry).insert(0,regEqVal)
-  ##If Register Jump to Row##
-  if (cmdType == "If Reg"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    regIndex = command.find("If Register ")
-    regEqIndex = command.find(" = ")
-    regJmpIndex = command.find(" Jump to Tab ")    
-    regNum = str(command[regIndex+12:regEqIndex])
-    regEq = str(command[regEqIndex+3:regJmpIndex])
-    tabNum = str(command[regJmpIndex+13:])
-    regEntry = "R"+regNum+"EntryField"
-    curRegVal = eval(regEntry).get()
-    if (curRegVal == regEq):
-      index = tab1.progView.get(0, "end").index("Tab Number " + tabNum)
-      tab1.progView.selection_clear(0, END)
-      tab1.progView.select_set(index)  
+        ser.reset_input_buffer()
+        ser.write(command.encode())    
+        deadline = time.time() + 30.0
+        required_joints = ["B", "C", "D", "E", "F"]
+        
+        while time.time() < deadline:
+          response = ser.readline().decode("utf-8").strip()
+          if not response:
+            continue
+          if response.startswith('E'):
+            ErrorHandler(response)
+            break
+          if response.startswith("A") and all(char in response for char in required_joints):
+            displayPosition(response)
+            break
+    
 
-  ##Calibrate Command##   
-  if (cmdType == "Calibr"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    calRobotAll()
-    if (calStat == 0):
-      stopProg()
+    ##Move Vis Command##
+    if cmdType == "Move V":
+        if moveInProc == 0:
+            moveInProc == 1
+        SPnewInex = command.find("[ PR: ")
+        SPendInex = command.find(" ] [")
+        xIndex = command.find(" X ")
+        yIndex = command.find(" Y ")
+        zIndex = command.find(" Z ")
+        rzIndex = command.find(" Rz ")
+        ryIndex = command.find(" Ry ")
+        rxIndex = command.find(" Rx ")
+        J7Index = command.find(" J7 ")
+        J8Index = command.find(" J8 ")
+        J9Index = command.find(" J9 ")
+        SpeedIndex = command.find(" S")
+        ACCspdIndex = command.find(" Ac ")
+        DECspdIndex = command.find(" Dc ")
+        ACCrampIndex = command.find(" Rm ")
+        WristConfIndex = command.find(" $")
+        SP = str(command[SPnewInex + 6 : SPendInex])
+        cx = eval("SP_" + SP + "_E1_EntryField").get()
+        cy = eval("SP_" + SP + "_E2_EntryField").get()
+        cz = eval("SP_" + SP + "_E3_EntryField").get()
+        crz = eval("SP_" + SP + "_E4_EntryField").get()
+        cry = eval("SP_" + SP + "_E5_EntryField").get()
+        crx = eval("SP_" + SP + "_E6_EntryField").get()
+        xVal = str(float(cx) + float(VisRetXrobEntryField.get()))
+        yVal = str(float(cy) + float(VisRetYrobEntryField.get()))
+        zVal = str(float(cz) + float(command[zIndex + 3 : rzIndex]))
+        rzVal = str(float(crz) + float(command[rzIndex + 4 : ryIndex]))
+        ryVal = str(float(cry) + float(command[ryIndex + 4 : rxIndex]))
+        rxVal = str(float(crx) + float(command[rxIndex + 4 : J7Index]))
+        J7Val = command[J7Index + 4 : J8Index]
+        J8Val = command[J8Index + 4 : J9Index]
+        J9Val = command[J9Index + 4 : SpeedIndex]
+        speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+        Speed = command[SpeedIndex + 4 : ACCspdIndex]
+        ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+        DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+        ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+        WC = command[WristConfIndex + 3 :]
+        visRot = VisRetAngleEntryField.get()
+        LoopMode = (
+            str(J1OpenLoopStat.get())
+            + str(J2OpenLoopStat.get())
+            + str(J3OpenLoopStat.get())
+            + str(J4OpenLoopStat.get())
+            + str(J5OpenLoopStat.get())
+            + str(J6OpenLoopStat.get())
+        )
+        command = (
+            "MV"
+            + "X"
+            + xVal
+            + "Y"
+            + yVal
+            + "Z"
+            + zVal
+            + "Rz"
+            + rzVal
+            + "Ry"
+            + ryVal
+            + "Rx"
+            + rxVal
+            + "J7"
+            + J7Val
+            + "J8"
+            + J8Val
+            + "J9"
+            + J9Val
+            + speedPrefix
+            + Speed
+            + "Ac"
+            + ACCspd
+            + "Dc"
+            + DECspd
+            + "Rm"
+            + ACCramp
+            + "W"
+            + WC
+            + "Vr"
+            + visRot
+            + "Lm"
+            + LoopMode
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        response = str(ser.readline().strip(), "utf-8")
+        if response[:1] == "E":
+            ErrorHandler(response)
+        else:
+            displayPosition(response)
 
-  ##Set tool##  
-  if (cmdType == "Tool S"): 
-    if (moveInProc == 1):
-      moveInProc == 2
-    almStatusLab.config(text="SYSTEM READY",  style="OK.TLabel")
-    almStatusLab2.config(text="SYSTEM READY",  style="OK.TLabel") 
-    xIndex = command.find(" X ")
-    yIndex = command.find(" Y ")
-    zIndex = command.find(" Z ")
-    rzIndex = command.find(" Rz ")
-    ryIndex = command.find(" Ry ")
-    rxIndex = command.find(" Rx ")
-    xVal = command[xIndex+3:yIndex]
-    yVal = command[yIndex+3:zIndex]
-    zVal = command[zIndex+3:rzIndex]
-    rzVal = command[rzIndex+4:ryIndex]
-    ryVal = command[ryIndex+4:rxIndex]
-    rxVal = command[rxIndex+4:]
-    TFxEntryField.delete(0,'end')
-    TFyEntryField.delete(0,'end')
-    TFzEntryField.delete(0,'end')
-    TFrzEntryField.delete(0,'end')
-    TFryEntryField.delete(0,'end')
-    TFrxEntryField.delete(0,'end')
-    TFxEntryField.insert(0,str(xVal))
-    TFyEntryField.insert(0,str(yVal))
-    TFzEntryField.insert(0,str(zVal))
-    TFrzEntryField.insert(0,str(rzVal))
-    TFryEntryField.insert(0,str(ryVal))
-    TFrxEntryField.insert(0,str(rxVal))
-    command = "TF"+"A"+xVal+"B"+yVal+"C"+zVal+"D"+rzVal+"E"+ryVal+"F"+rxVal+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.read()
-     
-  
-  ##Move J Command##  
-  if (cmdType == "Move J"): 
-    if (moveInProc == 0):
-      moveInProc == 1
-    xIndex = command.find(" X ")
-    yIndex = command.find(" Y ")
-    zIndex = command.find(" Z ")
-    rzIndex = command.find(" Rz ")
-    ryIndex = command.find(" Ry ")
-    rxIndex = command.find(" Rx ")
-    J7Index = command.find(" J7 ")
-    J8Index = command.find(" J8 ")
-    J9Index = command.find(" J9 ")	
-    SpeedIndex = command.find(" S")
-    ACCspdIndex = command.find(" Ac ")
-    DECspdIndex = command.find(" Dc ")
-    ACCrampIndex = command.find(" Rm ")
-    WristConfIndex = command.find(" $")
-    xVal = command[xIndex+3:yIndex]
-    yVal = command[yIndex+3:zIndex]
-    zVal = command[zIndex+3:rzIndex]
-    rzVal = command[rzIndex+4:ryIndex]
-    ryVal = command[ryIndex+4:rxIndex]
-    rxVal = command[rxIndex+4:J7Index]
-    J7Val = command[J7Index+4:J8Index]
-    J8Val = command[J8Index+4:J9Index]
-    J9Val = command[J9Index+4:SpeedIndex]
-    speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-    Speed = command[SpeedIndex+4:ACCspdIndex]
-    ACCspd = command[ACCspdIndex+4:DECspdIndex]
-    DECspd = command[DECspdIndex+4:ACCrampIndex]
-    ACCramp = command[ACCrampIndex+4:WristConfIndex]
-    WC = command[WristConfIndex+3:]
-    LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-    command = "MJ"+"X"+xVal+"Y"+yVal+"Z"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"J7"+J7Val+"J8"+J8Val+"J9"+J9Val+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    #ser.read()
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response) 
+    ##Move PR Command##
+    if cmdType == "Move P":
+        if moveInProc == 0:
+            moveInProc == 1
+        SPnewInex = command.find("[ PR: ")
+        SPendInex = command.find(" ] [")
+        J7Index = command.find(" J7 ")
+        J8Index = command.find(" J8 ")
+        J9Index = command.find(" J9 ")
+        SpeedIndex = command.find(" S")
+        ACCspdIndex = command.find(" Ac ")
+        DECspdIndex = command.find(" Dc ")
+        ACCrampIndex = command.find(" Rm ")
+        WristConfIndex = command.find(" $")
+        SP = str(command[SPnewInex + 6 : SPendInex])
+        cx = eval("SP_" + SP + "_E1_EntryField").get()
+        cy = eval("SP_" + SP + "_E2_EntryField").get()
+        cz = eval("SP_" + SP + "_E3_EntryField").get()
+        crz = eval("SP_" + SP + "_E4_EntryField").get()
+        cry = eval("SP_" + SP + "_E5_EntryField").get()
+        crx = eval("SP_" + SP + "_E6_EntryField").get()
+        xVal = str(float(cx))
+        yVal = str(float(cy))
+        zVal = str(float(cz))
+        rzVal = str(float(crz))
+        ryVal = str(float(cry))
+        rxVal = str(float(crx))
+        J7Val = command[J7Index + 4 : J8Index]
+        J8Val = command[J8Index + 4 : J9Index]
+        J9Val = command[J9Index + 4 : SpeedIndex]
+        speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+        Speed = command[SpeedIndex + 4 : ACCspdIndex]
+        ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+        DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+        ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+        WC = command[WristConfIndex + 3 :]
+        LoopMode = (
+            str(J1OpenLoopStat.get())
+            + str(J2OpenLoopStat.get())
+            + str(J3OpenLoopStat.get())
+            + str(J4OpenLoopStat.get())
+            + str(J5OpenLoopStat.get())
+            + str(J6OpenLoopStat.get())
+        )
+        command = (
+            "MJ"
+            + "X"
+            + xVal
+            + "Y"
+            + yVal
+            + "Z"
+            + zVal
+            + "Rz"
+            + rzVal
+            + "Ry"
+            + ryVal
+            + "Rx"
+            + rxVal
+            + "J7"
+            + J7Val
+            + "J8"
+            + J8Val
+            + "J9"
+            + J9Val
+            + speedPrefix
+            + Speed
+            + "Ac"
+            + ACCspd
+            + "Dc"
+            + DECspd
+            + "Rm"
+            + ACCramp
+            + "W"
+            + WC
+            + "Lm"
+            + LoopMode
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        response = str(ser.readline().strip(), "utf-8")
+        if response[:1] == "E":
+            ErrorHandler(response)
+        else:
+            displayPosition(response)
 
-
- ##Offs J Command##  
-  if (cmdType == "OFF J "): 
-    if (moveInProc == 0):
-      moveInProc == 1
-    SPnewInex = command.find("[ PR: ")  
-    SPendInex = command.find(" ] [")
-    xIndex = command.find(" X ")
-    yIndex = command.find(" Y ")
-    zIndex = command.find(" Z ")
-    rzIndex = command.find(" Rz ")
-    ryIndex = command.find(" Ry ")
-    rxIndex = command.find(" Rx ")
-    J7Index = command.find(" J7 ")
-    J8Index = command.find(" J8 ")
-    J9Index = command.find(" J9 ")	
-    SpeedIndex = command.find(" S")
-    ACCspdIndex = command.find(" Ac ")
-    DECspdIndex = command.find(" Dc ")
-    ACCrampIndex = command.find(" Rm ")
-    WristConfIndex = command.find(" $")
-    SP = str(command[SPnewInex+6:SPendInex])
-    cx = eval("SP_"+SP+"_E1_EntryField").get()
-    cy = eval("SP_"+SP+"_E2_EntryField").get()
-    cz = eval("SP_"+SP+"_E3_EntryField").get()
-    crz = eval("SP_"+SP+"_E4_EntryField").get()
-    cry = eval("SP_"+SP+"_E5_EntryField").get()
-    crx = eval("SP_"+SP+"_E6_EntryField").get()
-    xVal = str(float(cx) + float(command[xIndex+3:yIndex]))
-    yVal = str(float(cy) + float(command[yIndex+3:zIndex]))
-    zVal = str(float(cz) + float(command[zIndex+3:rzIndex]))
-    rzVal = str(float(crz) + float(command[rzIndex+4:ryIndex]))
-    ryVal = str(float(cry) + float(command[ryIndex+4:rxIndex]))
-    rxVal = str(float(crx) + float(command[rxIndex+4:J7Index]))
-    J7Val = command[J7Index+4:J8Index]
-    J8Val = command[J8Index+4:J9Index]
-    J9Val = command[J9Index+4:SpeedIndex]
-    speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-    Speed = command[SpeedIndex+4:ACCspdIndex]
-    ACCspd = command[ACCspdIndex+4:DECspdIndex]
-    DECspd = command[DECspdIndex+4:ACCrampIndex]
-    ACCramp = command[ACCrampIndex+4:WristConfIndex]
-    WC = command[WristConfIndex+3:]
-    LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-    command = "MJ"+"X"+xVal+"Y"+yVal+"Z"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"J7"+J7Val+"J8"+J8Val+"J9"+J9Val+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response)  
-
-  ##Move Vis Command##  
-  if (cmdType == "Move V"): 
-    if (moveInProc == 0):
-      moveInProc == 1
-    SPnewInex = command.find("[ PR: ")  
-    SPendInex = command.find(" ] [")
-    xIndex = command.find(" X ")
-    yIndex = command.find(" Y ")
-    zIndex = command.find(" Z ")
-    rzIndex = command.find(" Rz ")
-    ryIndex = command.find(" Ry ")
-    rxIndex = command.find(" Rx ")
-    J7Index = command.find(" J7 ")
-    J8Index = command.find(" J8 ")
-    J9Index = command.find(" J9 ")	
-    SpeedIndex = command.find(" S")
-    ACCspdIndex = command.find(" Ac ")
-    DECspdIndex = command.find(" Dc ")
-    ACCrampIndex = command.find(" Rm ")
-    WristConfIndex = command.find(" $")
-    SP = str(command[SPnewInex+6:SPendInex])
-    cx = eval("SP_"+SP+"_E1_EntryField").get()
-    cy = eval("SP_"+SP+"_E2_EntryField").get()
-    cz = eval("SP_"+SP+"_E3_EntryField").get()
-    crz = eval("SP_"+SP+"_E4_EntryField").get()
-    cry = eval("SP_"+SP+"_E5_EntryField").get()
-    crx = eval("SP_"+SP+"_E6_EntryField").get()
-    xVal = str(float(cx) + float(VisRetXrobEntryField.get()))
-    yVal = str(float(cy) + float(VisRetYrobEntryField.get()))
-    zVal = str(float(cz) + float(command[zIndex+3:rzIndex]))
-    rzVal = str(float(crz) + float(command[rzIndex+4:ryIndex]))
-    ryVal = str(float(cry) + float(command[ryIndex+4:rxIndex]))
-    rxVal = str(float(crx) + float(command[rxIndex+4:J7Index]))
-    J7Val = command[J7Index+4:J8Index]
-    J8Val = command[J8Index+4:J9Index]
-    J9Val = command[J9Index+4:SpeedIndex]
-    speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-    Speed = command[SpeedIndex+4:ACCspdIndex]
-    ACCspd = command[ACCspdIndex+4:DECspdIndex]
-    DECspd = command[DECspdIndex+4:ACCrampIndex]
-    ACCramp = command[ACCrampIndex+4:WristConfIndex]
-    WC = command[WristConfIndex+3:]
-    visRot = VisRetAngleEntryField.get()
-    LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-    command = "MV"+"X"+xVal+"Y"+yVal+"Z"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"J7"+J7Val+"J8"+J8Val+"J9"+J9Val+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Vr"+visRot+"Lm"+LoopMode+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response)      
-
-  ##Move PR Command##  
-  if (cmdType == "Move P"): 
-    if (moveInProc == 0):
-      moveInProc == 1
-    SPnewInex = command.find("[ PR: ")  
-    SPendInex = command.find(" ] [")
-    J7Index = command.find(" J7 ")
-    J8Index = command.find(" J8 ")
-    J9Index = command.find(" J9 ")		
-    SpeedIndex = command.find(" S")
-    ACCspdIndex = command.find(" Ac ")
-    DECspdIndex = command.find(" Dc ")
-    ACCrampIndex = command.find(" Rm ")
-    WristConfIndex = command.find(" $")
-    SP = str(command[SPnewInex+6:SPendInex])
-    cx = eval("SP_"+SP+"_E1_EntryField").get()
-    cy = eval("SP_"+SP+"_E2_EntryField").get()
-    cz = eval("SP_"+SP+"_E3_EntryField").get()
-    crz = eval("SP_"+SP+"_E4_EntryField").get()
-    cry = eval("SP_"+SP+"_E5_EntryField").get()
-    crx = eval("SP_"+SP+"_E6_EntryField").get()
-    xVal = str(float(cx))
-    yVal = str(float(cy))
-    zVal = str(float(cz))
-    rzVal = str(float(crz))
-    ryVal = str(float(cry))
-    rxVal = str(float(crx))
-    J7Val = command[J7Index+4:J8Index]
-    J8Val = command[J8Index+4:J9Index]
-    J9Val = command[J9Index+4:SpeedIndex]
-    speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-    Speed = command[SpeedIndex+4:ACCspdIndex]
-    ACCspd = command[ACCspdIndex+4:DECspdIndex]
-    DECspd = command[DECspdIndex+4:ACCrampIndex]
-    ACCramp = command[ACCrampIndex+4:WristConfIndex]
-    WC = command[WristConfIndex+3:]
-    LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-    command = "MJ"+"X"+xVal+"Y"+yVal+"Z"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"J7"+J7Val+"J8"+J8Val+"J9"+J9Val+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response)  
-
-  ##OFFS PR Command##  
-  if (cmdType == "OFF PR"): 
-    if (moveInProc == 0):
-      moveInProc == 1
-    SPnewInex = command.find("[ PR: ")  
-    SPendInex = command.find(" ] offs")
-    SP2newInex = command.find("[ *PR: ")  
-    SP2endInex = command.find(" ]  [")
-    J7Index = command.find(" J7 ")
-    J8Index = command.find(" J8 ")
-    J9Index = command.find(" J9 ")
-    SpeedIndex = command.find(" S")
-    ACCspdIndex = command.find(" Ac ")
-    DECspdIndex = command.find(" Dc ")
-    ACCrampIndex = command.find(" Rm ")
-    WristConfIndex = command.find(" $")
-    SP = str(command[SPnewInex+6:SPendInex])
-    SP2 = str(command[SP2newInex+7:SP2endInex])
-    xVal = str(float(eval("SP_"+SP+"_E1_EntryField").get()) + float(eval("SP_"+SP2+"_E1_EntryField").get()))
-    yVal = str(float(eval("SP_"+SP+"_E2_EntryField").get()) + float(eval("SP_"+SP2+"_E2_EntryField").get()))
-    zVal = str(float(eval("SP_"+SP+"_E3_EntryField").get()) + float(eval("SP_"+SP2+"_E3_EntryField").get()))
-    rzVal = str(float(eval("SP_"+SP+"_E4_EntryField").get()) + float(eval("SP_"+SP2+"_E4_EntryField").get()))
-    ryVal = str(float(eval("SP_"+SP+"_E5_EntryField").get()) + float(eval("SP_"+SP2+"_E5_EntryField").get()))
-    rxVal = str(float(eval("SP_"+SP+"_E6_EntryField").get()) + float(eval("SP_"+SP2+"_E6_EntryField").get()))	
-    J7Val = command[J7Index+4:J8Index]
-    J8Val = command[J8Index+4:J9Index]
-    J9Val = command[J9Index+4:SpeedIndex]
-    speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-    Speed = command[SpeedIndex+4:ACCspdIndex]
-    ACCspd = command[ACCspdIndex+4:DECspdIndex]
-    DECspd = command[DECspdIndex+4:ACCrampIndex]
-    ACCramp = command[ACCrampIndex+4:WristConfIndex]
-    WC = command[WristConfIndex+3:]
-    LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-    command = "MJ"+"X"+xVal+"Y"+yVal+"Z"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"J7"+J7Val+"J8"+J8Val+"J9"+J9Val+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response) 
+    ##OFFS PR Command##
+    if cmdType == "OFF PR":
+        if moveInProc == 0:
+            moveInProc == 1
+        SPnewInex = command.find("[ PR: ")
+        SPendInex = command.find(" ] offs")
+        SP2newInex = command.find("[ *PR: ")
+        SP2endInex = command.find(" ]  [")
+        J7Index = command.find(" J7 ")
+        J8Index = command.find(" J8 ")
+        J9Index = command.find(" J9 ")
+        SpeedIndex = command.find(" S")
+        ACCspdIndex = command.find(" Ac ")
+        DECspdIndex = command.find(" Dc ")
+        ACCrampIndex = command.find(" Rm ")
+        WristConfIndex = command.find(" $")
+        SP = str(command[SPnewInex + 6 : SPendInex])
+        SP2 = str(command[SP2newInex + 7 : SP2endInex])
+        xVal = str(
+            float(eval("SP_" + SP + "_E1_EntryField").get())
+            + float(eval("SP_" + SP2 + "_E1_EntryField").get())
+        )
+        yVal = str(
+            float(eval("SP_" + SP + "_E2_EntryField").get())
+            + float(eval("SP_" + SP2 + "_E2_EntryField").get())
+        )
+        zVal = str(
+            float(eval("SP_" + SP + "_E3_EntryField").get())
+            + float(eval("SP_" + SP2 + "_E3_EntryField").get())
+        )
+        rzVal = str(
+            float(eval("SP_" + SP + "_E4_EntryField").get())
+            + float(eval("SP_" + SP2 + "_E4_EntryField").get())
+        )
+        ryVal = str(
+            float(eval("SP_" + SP + "_E5_EntryField").get())
+            + float(eval("SP_" + SP2 + "_E5_EntryField").get())
+        )
+        rxVal = str(
+            float(eval("SP_" + SP + "_E6_EntryField").get())
+            + float(eval("SP_" + SP2 + "_E6_EntryField").get())
+        )
+        J7Val = command[J7Index + 4 : J8Index]
+        J8Val = command[J8Index + 4 : J9Index]
+        J9Val = command[J9Index + 4 : SpeedIndex]
+        speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+        Speed = command[SpeedIndex + 4 : ACCspdIndex]
+        ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+        DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+        ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+        WC = command[WristConfIndex + 3 :]
+        LoopMode = (
+            str(J1OpenLoopStat.get())
+            + str(J2OpenLoopStat.get())
+            + str(J3OpenLoopStat.get())
+            + str(J4OpenLoopStat.get())
+            + str(J5OpenLoopStat.get())
+            + str(J6OpenLoopStat.get())
+        )
+        command = (
+            "MJ"
+            + "X"
+            + xVal
+            + "Y"
+            + yVal
+            + "Z"
+            + zVal
+            + "Rz"
+            + rzVal
+            + "Ry"
+            + ryVal
+            + "Rx"
+            + rxVal
+            + "J7"
+            + J7Val
+            + "J8"
+            + J8Val
+            + "J9"
+            + J9Val
+            + speedPrefix
+            + Speed
+            + "Ac"
+            + ACCspd
+            + "Dc"
+            + DECspd
+            + "Rm"
+            + ACCramp
+            + "W"
+            + WC
+            + "Lm"
+            + LoopMode
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        response = str(ser.readline().strip(), "utf-8")
+        if response[:1] == "E":
+            ErrorHandler(response)
+        else:
+            displayPosition(response)
 
   ##Move L Command##  
   if (cmdType == "Move L"): 
@@ -1172,350 +1511,538 @@ def executeRow():
     else:
       displayPosition(response)
 
-  ##Move R Command##  
-  if (cmdType == "Move R"):
-    if (moveInProc == 0):
-      moveInProc == 1 
-    J1Index = command.find(" J1 ")
-    J2Index = command.find(" J2 ")
-    J3Index = command.find(" J3 ")
-    J4Index = command.find(" J4 ")
-    J5Index = command.find(" J5 ")
-    J6Index = command.find(" J6 ")
-    J7Index = command.find(" J7 ")
-    J8Index = command.find(" J8 ")
-    J9Index = command.find(" J9 ")
-    SpeedIndex = command.find(" S")
-    ACCspdIndex = command.find(" Ac ")
-    DECspdIndex = command.find(" Dc ")
-    ACCrampIndex = command.find(" Rm ")
-    WristConfIndex = command.find(" $")
-    J1Val = command[J1Index+4:J2Index]
-    J2Val = command[J2Index+4:J3Index]
-    J3Val = command[J3Index+4:J4Index]
-    J4Val = command[J4Index+4:J5Index]
-    J5Val = command[J5Index+4:J6Index]
-    J6Val = command[J6Index+4:J7Index]
-    J7Val = command[J7Index+4:J8Index]
-    J8Val = command[J8Index+4:J9Index]
-    J9Val = command[J9Index+4:SpeedIndex]
-    speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-    Speed = command[SpeedIndex+4:ACCspdIndex]
-    ACCspd = command[ACCspdIndex+4:DECspdIndex]
-    DECspd = command[DECspdIndex+4:ACCrampIndex]
-    ACCramp = command[ACCrampIndex+4:WristConfIndex]
-    WC = command[WristConfIndex+3:]
-    LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-    command = "RJ"+"A"+J1Val+"B"+J2Val+"C"+J3Val+"D"+J4Val+"E"+J5Val+"F"+J6Val+"J7"+J7Val+"J8"+J8Val+"J9"+J9Val+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response) 
+    ##Move R Command##
+    if cmdType == "Move R":
+        if moveInProc == 0:
+            moveInProc == 1
+        J1Index = command.find(" J1 ")
+        J2Index = command.find(" J2 ")
+        J3Index = command.find(" J3 ")
+        J4Index = command.find(" J4 ")
+        J5Index = command.find(" J5 ")
+        J6Index = command.find(" J6 ")
+        J7Index = command.find(" J7 ")
+        J8Index = command.find(" J8 ")
+        J9Index = command.find(" J9 ")
+        SpeedIndex = command.find(" S")
+        ACCspdIndex = command.find(" Ac ")
+        DECspdIndex = command.find(" Dc ")
+        ACCrampIndex = command.find(" Rm ")
+        WristConfIndex = command.find(" $")
+        J1Val = command[J1Index + 4 : J2Index]
+        J2Val = command[J2Index + 4 : J3Index]
+        J3Val = command[J3Index + 4 : J4Index]
+        J4Val = command[J4Index + 4 : J5Index]
+        J5Val = command[J5Index + 4 : J6Index]
+        J6Val = command[J6Index + 4 : J7Index]
+        J7Val = command[J7Index + 4 : J8Index]
+        J8Val = command[J8Index + 4 : J9Index]
+        J9Val = command[J9Index + 4 : SpeedIndex]
+        speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+        Speed = command[SpeedIndex + 4 : ACCspdIndex]
+        ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+        DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+        ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+        WC = command[WristConfIndex + 3 :]
+        LoopMode = (
+            str(J1OpenLoopStat.get())
+            + str(J2OpenLoopStat.get())
+            + str(J3OpenLoopStat.get())
+            + str(J4OpenLoopStat.get())
+            + str(J5OpenLoopStat.get())
+            + str(J6OpenLoopStat.get())
+        )
+        command = (
+            "RJ"
+            + "A"
+            + J1Val
+            + "B"
+            + J2Val
+            + "C"
+            + J3Val
+            + "D"
+            + J4Val
+            + "E"
+            + J5Val
+            + "F"
+            + J6Val
+            + "J7"
+            + J7Val
+            + "J8"
+            + J8Val
+            + "J9"
+            + J9Val
+            + speedPrefix
+            + Speed
+            + "Ac"
+            + ACCspd
+            + "Dc"
+            + DECspd
+            + "Rm"
+            + ACCramp
+            + "W"
+            + WC
+            + "Lm"
+            + LoopMode
+            + "\n"
+        )
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        # ser.write(command.encode())
+        # ser.flushInput()
+        # time.sleep(0.2)
+        # response = str(ser.readline().strip(), "utf-8")
+        # if response[:1] == "E":
+        #     ErrorHandler(response)
+        # else:
+        #     displayPosition(response)
 
-      
-  ##Move A Command##  
-  if (cmdType == "Move A"):
-    if (moveInProc == 0):
-      moveInProc == 1
-    subCmd=command[:10]
-    if (subCmd == "Move A End"):
-      almStatusLab.config(text="Move A must start with a Mid followed by End", style="Alarm.TLabel")
-      almStatusLab2.config(text="Move A must start with a Mid followed by End", style="Alarm.TLabel")
-    else:
-      xIndex = command.find(" X ")
-      yIndex = command.find(" Y ")
-      zIndex = command.find(" Z ")
-      rzIndex = command.find(" Rz ")
-      ryIndex = command.find(" Ry ")
-      rxIndex = command.find(" Rx ")
-      trIndex = command.find(" Tr ")	
-      SpeedIndex = command.find(" S")
-      ACCspdIndex = command.find(" Ac ")
-      DECspdIndex = command.find(" Dc ")
-      ACCrampIndex = command.find(" Rm ")
-      WristConfIndex = command.find(" $")
-      xVal = command[xIndex+3:yIndex]
-      yVal = command[yIndex+3:zIndex]
-      zVal = command[zIndex+3:rzIndex]
-      rzVal = command[rzIndex+4:ryIndex]
-      ryVal = command[ryIndex+4:rxIndex]
-      rxVal = command[rxIndex+4:trIndex]
-      trVal = command[trIndex+4:SpeedIndex]
-      speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-      Speed = command[SpeedIndex+4:ACCspdIndex]
-      ACCspd = command[ACCspdIndex+4:DECspdIndex]
-      DECspd = command[DECspdIndex+4:ACCrampIndex]
-      ACCramp = command[ACCrampIndex+4:WristConfIndex]
-      WC = command[WristConfIndex+3:]
-      TCX = 0
-      TCY = 0 
-      TCZ = 0
-      TCRx = 0
-      TCRy = 0
-      TCRz = 0
-      ##read next row for End position	
-      curRow = tab1.progView.curselection()[0]
-      selRow = tab1.progView.curselection()[0]
-      last = tab1.progView.index('end')
-      for row in range (0,selRow):
-        tab1.progView.itemconfig(row, {'fg': 'dodger blue'})
-      tab1.progView.itemconfig(selRow, {'fg': 'blue2'})
-      for row in range (selRow+1,last):
-        tab1.progView.itemconfig(row, {'fg': 'black'})
-      tab1.progView.selection_clear(0, END)
-      selRow += 1
-      tab1.progView.select_set(selRow)
-      curRow += 1
-      selRow = tab1.progView.curselection()[0]
-      tab1.progView.see(selRow+2)
-      data = list(map(int, tab1.progView.curselection()))
-      command=tab1.progView.get(data[0])
-      xIndex = command.find(" X ")
-      yIndex = command.find(" Y ")
-      zIndex = command.find(" Z ")
-      rzIndex = command.find(" Rz ")
-      ryIndex = command.find(" Ry ")
-      rxIndex = command.find(" Rx ")
-      trIndex = command.find(" Tr ")	
-      SpeedIndex = command.find(" S")
-      ACCspdIndex = command.find(" Ac ")
-      DECspdIndex = command.find(" Dc ")
-      ACCrampIndex = command.find(" Rm ")
-      WristConfIndex = command.find(" $")
-      Xend = command[xIndex+3:yIndex]
-      Yend = command[yIndex+3:zIndex]
-      Zend = command[zIndex+3:rzIndex]
-      rzVal = command[rzIndex+4:ryIndex]
-      ryVal = command[ryIndex+4:rxIndex]
-      rxVal = command[rxIndex+4:trIndex]
-      trVal = command[trIndex+4:SpeedIndex]
-      speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-      Speed = command[SpeedIndex+4:ACCspdIndex]
-      ACCspd = command[ACCspdIndex+4:DECspdIndex]
-      DECspd = command[DECspdIndex+4:ACCrampIndex]
-      ACCramp = command[ACCrampIndex+4:WristConfIndex]
-      WC = command[WristConfIndex+3:]
-      TCX = 0
-      TCY = 0 
-      TCZ = 0
-      TCRx = 0
-      TCRy = 0
-      TCRz = 0
-      #move arc command
-      LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-      command = "MA"+"X"+xVal+"Y"+yVal+"Z"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"Ex"+Xend+"Ey"+Yend+"Ez"+Zend+"Tr"+trVal+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-      cmdSentEntryField.delete(0, 'end')
-      cmdSentEntryField.insert(0,command)
-      ser.write(command.encode())
-      ser.flushInput()
-      time.sleep(.2)
-      response = str(ser.readline().strip(),'utf-8')
-      if (response[:1] == 'E'):
-        ErrorHandler(response)   
-      else:
-        displayPosition(response) 
+        ser.reset_input_buffer()
+        ser.write(command.encode())    
+        deadline = time.time() + 30.0
+        required_joints = ["B", "C", "D", "E", "F"]
+        
+        while time.time() < deadline:
+          response = ser.readline().decode("utf-8").strip()
+          if not response:
+            continue
+          if response.startswith('E'):
+            ErrorHandler(response)
+            break
+          if response.startswith("A") and all(char in response for char in required_joints):
+            displayPosition(response)
+            break
 
-  ##Move C Command##  
-  if (cmdType == "Move C"):
-    if (moveInProc == 0):
-      moveInProc == 1
-    subCmd=command[:10]
-    if (subCmd == "Move C Sta" or subCmd == "Move C Pla"):
-      almStatusLab.config(text="Move C must start with a Center followed by Start & Plane", style="Alarm.TLabel")
-      almStatusLab2.config(text="Move C must start with a Center followed by Start & Plane", style="Alarm.TLabel")
-    else:
-      xIndex = command.find(" X ")
-      yIndex = command.find(" Y ")
-      zIndex = command.find(" Z ")
-      rzIndex = command.find(" Rz ")
-      ryIndex = command.find(" Ry ")
-      rxIndex = command.find(" Rx ")
-      trIndex = command.find(" Tr ")	
-      SpeedIndex = command.find(" S")
-      ACCspdIndex = command.find(" Ac ")
-      DECspdIndex = command.find(" Dc ")
-      ACCrampIndex = command.find(" Rm ")
-      WristConfIndex = command.find(" $")
-      xVal = command[xIndex+3:yIndex]
-      yVal = command[yIndex+3:zIndex]
-      zVal = command[zIndex+3:rzIndex]
-      rzVal = command[rzIndex+4:ryIndex]
-      ryVal = command[ryIndex+4:rxIndex]
-      rxVal = command[rxIndex+4:trIndex]
-      trVal = command[trIndex+4:SpeedIndex]
-      speedPrefix = command[SpeedIndex+1:SpeedIndex+3]
-      Speed = command[SpeedIndex+4:ACCspdIndex]
-      ACCspd = command[ACCspdIndex+4:DECspdIndex]
-      DECspd = command[DECspdIndex+4:ACCrampIndex]
-      ACCramp = command[ACCrampIndex+4:WristConfIndex]
-      WC = command[WristConfIndex+3:]
-      TCX = 0
-      TCY = 0 
-      TCZ = 0
-      TCRx = 0
-      TCRy = 0
-      TCRz = 0
-      ##read next row for Mid position	
-      curRow = tab1.progView.curselection()[0]
-      selRow = tab1.progView.curselection()[0]
-      last = tab1.progView.index('end')
-      for row in range (0,selRow):
-        tab1.progView.itemconfig(row, {'fg': 'dodger blue'})
-      tab1.progView.itemconfig(selRow, {'fg': 'blue2'})
-      for row in range (selRow+1,last):
-        tab1.progView.itemconfig(row, {'fg': 'black'})
-      tab1.progView.selection_clear(0, END)
-      selRow += 1
-      tab1.progView.select_set(selRow)
-      curRow += 1
-      selRow = tab1.progView.curselection()[0]
-      tab1.progView.see(selRow+2)
-      data = list(map(int, tab1.progView.curselection()))
-      command=tab1.progView.get(data[0])
-      xIndex = command.find(" X ")
-      yIndex = command.find(" Y ")
-      zIndex = command.find(" Z ")
-      Xmid = command[xIndex+3:yIndex]
-      Ymid = command[yIndex+3:zIndex]
-      Zmid = command[zIndex+3:rzIndex]
-      ##read next row for End position	
-      curRow = tab1.progView.curselection()[0]
-      selRow = tab1.progView.curselection()[0]
-      last = tab1.progView.index('end')
-      for row in range (0,selRow):
-        tab1.progView.itemconfig(row, {'fg': 'dodger blue'})
-      tab1.progView.itemconfig(selRow, {'fg': 'blue2'})
-      for row in range (selRow+1,last):
-        tab1.progView.itemconfig(row, {'fg': 'black'})
-      tab1.progView.selection_clear(0, END)
-      selRow += 1
-      tab1.progView.select_set(selRow)
-      curRow += 1
-      selRow = tab1.progView.curselection()[0]
-      tab1.progView.see(selRow+2)
-      data = list(map(int, tab1.progView.curselection()))
-      command=tab1.progView.get(data[0])
-      xIndex = command.find(" X ")
-      yIndex = command.find(" Y ")
-      zIndex = command.find(" Z ")
-      Xend = command[xIndex+3:yIndex]
-      Yend = command[yIndex+3:zIndex]
-      Zend = command[zIndex+3:rzIndex]
-      #move j to the beginning (second or mid point is start of circle)
-      LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-      command = "MJ"+"X"+Xmid+"Y"+Ymid+"Z"+Zmid+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"Tr"+trVal+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-      ser.write(command.encode())
-      ser.flushInput()
-      time.sleep(.2)
-      response = str(ser.readline().strip(),'utf-8')
-      #move circle command
-      LoopMode = str(J1OpenLoopStat.get())+str(J2OpenLoopStat.get())+str(J3OpenLoopStat.get())+str(J4OpenLoopStat.get())+str(J5OpenLoopStat.get())+str(J6OpenLoopStat.get())
-      command = "MC"+"Cx"+xVal+"Cy"+yVal+"Cz"+zVal+"Rz"+rzVal+"Ry"+ryVal+"Rx"+rxVal+"Bx"+Xmid+"By"+Ymid+"Bz"+Zmid+"Px"+Xend+"Py"+Yend+"Pz"+Zend+"Tr"+trVal+speedPrefix+Speed+"Ac"+ACCspd+"Dc"+DECspd+"Rm"+ACCramp+"W"+WC+"Lm"+LoopMode+"\n"
-      cmdSentEntryField.delete(0, 'end')
-      cmdSentEntryField.insert(0,command)
-      ser.write(command.encode())
-      ser.flushInput()
-      time.sleep(.1)
-      response = str(ser.readline().strip(),'utf-8')
-      if (response[:1] == 'E'):
-        ErrorHandler(response)   
-      else:
-        displayPosition(response) 
+    ##Move A Command##
+    if cmdType == "Move A":
+        if moveInProc == 0:
+            moveInProc == 1
+        subCmd = command[:10]
+        if subCmd == "Move A End":
+            almStatusLab.config(
+                text="Move A must start with a Mid followed by End",
+                style="Alarm.TLabel",
+            )
+            almStatusLab2.config(
+                text="Move A must start with a Mid followed by End",
+                style="Alarm.TLabel",
+            )
+        else:
+            xIndex = command.find(" X ")
+            yIndex = command.find(" Y ")
+            zIndex = command.find(" Z ")
+            rzIndex = command.find(" Rz ")
+            ryIndex = command.find(" Ry ")
+            rxIndex = command.find(" Rx ")
+            trIndex = command.find(" Tr ")
+            SpeedIndex = command.find(" S")
+            ACCspdIndex = command.find(" Ac ")
+            DECspdIndex = command.find(" Dc ")
+            ACCrampIndex = command.find(" Rm ")
+            WristConfIndex = command.find(" $")
+            xVal = command[xIndex + 3 : yIndex]
+            yVal = command[yIndex + 3 : zIndex]
+            zVal = command[zIndex + 3 : rzIndex]
+            rzVal = command[rzIndex + 4 : ryIndex]
+            ryVal = command[ryIndex + 4 : rxIndex]
+            rxVal = command[rxIndex + 4 : trIndex]
+            trVal = command[trIndex + 4 : SpeedIndex]
+            speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+            Speed = command[SpeedIndex + 4 : ACCspdIndex]
+            ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+            DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+            ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+            WC = command[WristConfIndex + 3 :]
+            TCX = 0
+            TCY = 0
+            TCZ = 0
+            TCRx = 0
+            TCRy = 0
+            TCRz = 0
+            ##read next row for End position
+            curRow = tab1.progView.curselection()[0]
+            selRow = tab1.progView.curselection()[0]
+            last = tab1.progView.index("end")
+            for row in range(0, selRow):
+                tab1.progView.itemconfig(row, {"fg": "dodger blue"})
+            tab1.progView.itemconfig(selRow, {"fg": "blue2"})
+            for row in range(selRow + 1, last):
+                tab1.progView.itemconfig(row, {"fg": "black"})
+            tab1.progView.selection_clear(0, END)
+            selRow += 1
+            tab1.progView.select_set(selRow)
+            curRow += 1
+            selRow = tab1.progView.curselection()[0]
+            tab1.progView.see(selRow + 2)
+            data = list(map(int, tab1.progView.curselection()))
+            command = tab1.progView.get(data[0])
+            xIndex = command.find(" X ")
+            yIndex = command.find(" Y ")
+            zIndex = command.find(" Z ")
+            rzIndex = command.find(" Rz ")
+            ryIndex = command.find(" Ry ")
+            rxIndex = command.find(" Rx ")
+            trIndex = command.find(" Tr ")
+            SpeedIndex = command.find(" S")
+            ACCspdIndex = command.find(" Ac ")
+            DECspdIndex = command.find(" Dc ")
+            ACCrampIndex = command.find(" Rm ")
+            WristConfIndex = command.find(" $")
+            Xend = command[xIndex + 3 : yIndex]
+            Yend = command[yIndex + 3 : zIndex]
+            Zend = command[zIndex + 3 : rzIndex]
+            rzVal = command[rzIndex + 4 : ryIndex]
+            ryVal = command[ryIndex + 4 : rxIndex]
+            rxVal = command[rxIndex + 4 : trIndex]
+            trVal = command[trIndex + 4 : SpeedIndex]
+            speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+            Speed = command[SpeedIndex + 4 : ACCspdIndex]
+            ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+            DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+            ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+            WC = command[WristConfIndex + 3 :]
+            TCX = 0
+            TCY = 0
+            TCZ = 0
+            TCRx = 0
+            TCRy = 0
+            TCRz = 0
+            # move arc command
+            LoopMode = (
+                str(J1OpenLoopStat.get())
+                + str(J2OpenLoopStat.get())
+                + str(J3OpenLoopStat.get())
+                + str(J4OpenLoopStat.get())
+                + str(J5OpenLoopStat.get())
+                + str(J6OpenLoopStat.get())
+            )
+            command = (
+                "MA"
+                + "X"
+                + xVal
+                + "Y"
+                + yVal
+                + "Z"
+                + zVal
+                + "Rz"
+                + rzVal
+                + "Ry"
+                + ryVal
+                + "Rx"
+                + rxVal
+                + "Ex"
+                + Xend
+                + "Ey"
+                + Yend
+                + "Ez"
+                + Zend
+                + "Tr"
+                + trVal
+                + speedPrefix
+                + Speed
+                + "Ac"
+                + ACCspd
+                + "Dc"
+                + DECspd
+                + "Rm"
+                + ACCramp
+                + "W"
+                + WC
+                + "Lm"
+                + LoopMode
+                + "\n"
+            )
+            cmdSentEntryField.delete(0, "end")
+            cmdSentEntryField.insert(0, command)
+            ser.write(command.encode())
+            ser.flushInput()
+            time.sleep(0.2)
+            response = str(ser.readline().strip(), "utf-8")
+            if response[:1] == "E":
+                ErrorHandler(response)
+            else:
+                displayPosition(response)
 
-  ##Start Spline
-  if (cmdType == "Start "):
-    splineActive = "1"
-    if (moveInProc == 1):
-      moveInProc == 2
-    command = "SL\n" 
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    ser.read() 
+    ##Move C Command##
+    if cmdType == "Move C":
+        if moveInProc == 0:
+            moveInProc == 1
+        subCmd = command[:10]
+        if subCmd == "Move C Sta" or subCmd == "Move C Pla":
+            almStatusLab.config(
+                text="Move C must start with a Center followed by Start & Plane",
+                style="Alarm.TLabel",
+            )
+            almStatusLab2.config(
+                text="Move C must start with a Center followed by Start & Plane",
+                style="Alarm.TLabel",
+            )
+        else:
+            xIndex = command.find(" X ")
+            yIndex = command.find(" Y ")
+            zIndex = command.find(" Z ")
+            rzIndex = command.find(" Rz ")
+            ryIndex = command.find(" Ry ")
+            rxIndex = command.find(" Rx ")
+            trIndex = command.find(" Tr ")
+            SpeedIndex = command.find(" S")
+            ACCspdIndex = command.find(" Ac ")
+            DECspdIndex = command.find(" Dc ")
+            ACCrampIndex = command.find(" Rm ")
+            WristConfIndex = command.find(" $")
+            xVal = command[xIndex + 3 : yIndex]
+            yVal = command[yIndex + 3 : zIndex]
+            zVal = command[zIndex + 3 : rzIndex]
+            rzVal = command[rzIndex + 4 : ryIndex]
+            ryVal = command[ryIndex + 4 : rxIndex]
+            rxVal = command[rxIndex + 4 : trIndex]
+            trVal = command[trIndex + 4 : SpeedIndex]
+            speedPrefix = command[SpeedIndex + 1 : SpeedIndex + 3]
+            Speed = command[SpeedIndex + 4 : ACCspdIndex]
+            ACCspd = command[ACCspdIndex + 4 : DECspdIndex]
+            DECspd = command[DECspdIndex + 4 : ACCrampIndex]
+            ACCramp = command[ACCrampIndex + 4 : WristConfIndex]
+            WC = command[WristConfIndex + 3 :]
+            TCX = 0
+            TCY = 0
+            TCZ = 0
+            TCRx = 0
+            TCRy = 0
+            TCRz = 0
+            ##read next row for Mid position
+            curRow = tab1.progView.curselection()[0]
+            selRow = tab1.progView.curselection()[0]
+            last = tab1.progView.index("end")
+            for row in range(0, selRow):
+                tab1.progView.itemconfig(row, {"fg": "dodger blue"})
+            tab1.progView.itemconfig(selRow, {"fg": "blue2"})
+            for row in range(selRow + 1, last):
+                tab1.progView.itemconfig(row, {"fg": "black"})
+            tab1.progView.selection_clear(0, END)
+            selRow += 1
+            tab1.progView.select_set(selRow)
+            curRow += 1
+            selRow = tab1.progView.curselection()[0]
+            tab1.progView.see(selRow + 2)
+            data = list(map(int, tab1.progView.curselection()))
+            command = tab1.progView.get(data[0])
+            xIndex = command.find(" X ")
+            yIndex = command.find(" Y ")
+            zIndex = command.find(" Z ")
+            Xmid = command[xIndex + 3 : yIndex]
+            Ymid = command[yIndex + 3 : zIndex]
+            Zmid = command[zIndex + 3 : rzIndex]
+            ##read next row for End position
+            curRow = tab1.progView.curselection()[0]
+            selRow = tab1.progView.curselection()[0]
+            last = tab1.progView.index("end")
+            for row in range(0, selRow):
+                tab1.progView.itemconfig(row, {"fg": "dodger blue"})
+            tab1.progView.itemconfig(selRow, {"fg": "blue2"})
+            for row in range(selRow + 1, last):
+                tab1.progView.itemconfig(row, {"fg": "black"})
+            tab1.progView.selection_clear(0, END)
+            selRow += 1
+            tab1.progView.select_set(selRow)
+            curRow += 1
+            selRow = tab1.progView.curselection()[0]
+            tab1.progView.see(selRow + 2)
+            data = list(map(int, tab1.progView.curselection()))
+            command = tab1.progView.get(data[0])
+            xIndex = command.find(" X ")
+            yIndex = command.find(" Y ")
+            zIndex = command.find(" Z ")
+            Xend = command[xIndex + 3 : yIndex]
+            Yend = command[yIndex + 3 : zIndex]
+            Zend = command[zIndex + 3 : rzIndex]
+            # move j to the beginning (second or mid point is start of circle)
+            LoopMode = (
+                str(J1OpenLoopStat.get())
+                + str(J2OpenLoopStat.get())
+                + str(J3OpenLoopStat.get())
+                + str(J4OpenLoopStat.get())
+                + str(J5OpenLoopStat.get())
+                + str(J6OpenLoopStat.get())
+            )
+            command = (
+                "MJ"
+                + "X"
+                + Xmid
+                + "Y"
+                + Ymid
+                + "Z"
+                + Zmid
+                + "Rz"
+                + rzVal
+                + "Ry"
+                + ryVal
+                + "Rx"
+                + rxVal
+                + "Tr"
+                + trVal
+                + speedPrefix
+                + Speed
+                + "Ac"
+                + ACCspd
+                + "Dc"
+                + DECspd
+                + "Rm"
+                + ACCramp
+                + "W"
+                + WC
+                + "Lm"
+                + LoopMode
+                + "\n"
+            )
+            ser.write(command.encode())
+            ser.flushInput()
+            time.sleep(0.2)
+            response = str(ser.readline().strip(), "utf-8")
+            # move circle command
+            LoopMode = (
+                str(J1OpenLoopStat.get())
+                + str(J2OpenLoopStat.get())
+                + str(J3OpenLoopStat.get())
+                + str(J4OpenLoopStat.get())
+                + str(J5OpenLoopStat.get())
+                + str(J6OpenLoopStat.get())
+            )
+            command = (
+                "MC"
+                + "Cx"
+                + xVal
+                + "Cy"
+                + yVal
+                + "Cz"
+                + zVal
+                + "Rz"
+                + rzVal
+                + "Ry"
+                + ryVal
+                + "Rx"
+                + rxVal
+                + "Bx"
+                + Xmid
+                + "By"
+                + Ymid
+                + "Bz"
+                + Zmid
+                + "Px"
+                + Xend
+                + "Py"
+                + Yend
+                + "Pz"
+                + Zend
+                + "Tr"
+                + trVal
+                + speedPrefix
+                + Speed
+                + "Ac"
+                + ACCspd
+                + "Dc"
+                + DECspd
+                + "Rm"
+                + ACCramp
+                + "W"
+                + WC
+                + "Lm"
+                + LoopMode
+                + "\n"
+            )
+            cmdSentEntryField.delete(0, "end")
+            cmdSentEntryField.insert(0, command)
+            ser.write(command.encode())
+            ser.flushInput()
+            time.sleep(0.1)
+            response = str(ser.readline().strip(), "utf-8")
+            if response[:1] == "E":
+                ErrorHandler(response)
+            else:
+                displayPosition(response)
 
-  ##End Spline
-  if (cmdType == "End Sp"):
-    splineActive = "0"
-    if(stopQueue == "1"):
-      stopQueue = "0"
-      stop()
-    if (moveInProc == 1):
-      moveInProc == 2
-    command = "SS\n" 
-    cmdSentEntryField.delete(0, 'end')
-    cmdSentEntryField.insert(0,command)
-    ser.write(command.encode())
-    ser.flushInput()
-    time.sleep(.2)
-    response = str(ser.readline().strip(),'utf-8')
-    if (response[:1] == 'E'):
-      ErrorHandler(response)   
-    else:
-      displayPosition(response) 
+    ##Start Spline
+    if cmdType == "Start ":
+        splineActive = "1"
+        if moveInProc == 1:
+            moveInProc == 2
+        command = "SL\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        ser.read()
 
-  ##Camera On
-  if(cmdType == "Cam On"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    start_vid()
+    ##End Spline
+    if cmdType == "End Sp":
+        splineActive = "0"
+        if stopQueue == "1":
+            stopQueue = "0"
+            stop()
+        if moveInProc == 1:
+            moveInProc == 2
+        command = "SS\n"
+        cmdSentEntryField.delete(0, "end")
+        cmdSentEntryField.insert(0, command)
+        ser.write(command.encode())
+        ser.flushInput()
+        time.sleep(0.2)
+        response = str(ser.readline().strip(), "utf-8")
+        if response[:1] == "E":
+            ErrorHandler(response)
+        else:
+            displayPosition(response)
 
-  ##Camera Off
-  if(cmdType == "Cam Of"):
-    if (moveInProc == 1):
-      moveInProc == 2
-    stop_vid()  
+    ##Camera On
+    if cmdType == "Cam On":
+        if moveInProc == 1:
+            moveInProc == 2
+        start_vid()
 
-  ##Vision Find
-  if(cmdType == "Vis Fi"):
-    #if (moveInProc == 1):
-      #moveInProc == 2
-    templateIndex = command.find("Vis Find - ")
-    bgColorIndex = command.find(" - BGcolor ")
-    scoreIndex = command.find(" Score ")
-    passIndex = command.find(" Pass ")
-    failIndex = command.find(" Fail ")
-    template = command[templateIndex+11:bgColorIndex]
-    checkBG = command[bgColorIndex+11:scoreIndex]
-    if(checkBG == "(Auto)"):
-      background = "Auto"
-    else:  
-      background = eval(command[bgColorIndex+11:scoreIndex])
-    min_score = float(command[scoreIndex+7:passIndex])*.01
-    passtab = command[passIndex+6:failIndex]
-    failtab = command[failIndex+6:]
-    take_pic()
-    status = visFind(template,min_score,background)
-    if (status == "pass"):
-      tabIndex = command.find("Tab-")
-      index = tab1.progView.get(0, "end").index("Tab Number " + passtab)
-      tab1.progView.selection_clear(0, END)
-      tab1.progView.select_set(index)  
-    elif (status == "fail"): 
-      tabIndex = command.find("Tab-")
-      index = tab1.progView.get(0, "end").index("Tab Number " + failtab)
-      tab1.progView.selection_clear(0, END)
-      tab1.progView.select_set(index) 
+    ##Camera Off
+    if cmdType == "Cam Of":
+        if moveInProc == 1:
+            moveInProc == 2
+        stop_vid()
 
-    
-  rowinproc = 0
-  
+    ##Vision Find
+    if cmdType == "Vis Fi":
+        # if (moveInProc == 1):
+        # moveInProc == 2
+        templateIndex = command.find("Vis Find - ")
+        bgColorIndex = command.find(" - BGcolor ")
+        scoreIndex = command.find(" Score ")
+        passIndex = command.find(" Pass ")
+        failIndex = command.find(" Fail ")
+        template = command[templateIndex + 11 : bgColorIndex]
+        checkBG = command[bgColorIndex + 11 : scoreIndex]
+        if checkBG == "(Auto)":
+            background = "Auto"
+        else:
+            background = eval(command[bgColorIndex + 11 : scoreIndex])
+        min_score = float(command[scoreIndex + 7 : passIndex]) * 0.01
+        passtab = command[passIndex + 6 : failIndex]
+        failtab = command[failIndex + 6 :]
+        take_pic()
+        status = visFind(template, min_score, background)
+        if status == "pass":
+            tabIndex = command.find("Tab-")
+            index = tab1.progView.get(0, "end").index("Tab Number " + passtab)
+            tab1.progView.selection_clear(0, END)
+            tab1.progView.select_set(index)
+        elif status == "fail":
+            tabIndex = command.find("Tab-")
+            index = tab1.progView.get(0, "end").index("Tab Number " + failtab)
+            tab1.progView.selection_clear(0, END)
+            tab1.progView.select_set(index)
+
+    rowinproc = 0
 
 
-
-
-  
 ##############################################################################################################################################################
 ### BUTTON JOGGING DEFS ############################################################################################################## BUTTON JOGGING DEFS ###
-##############################################################################################################################################################  
- 
+##############################################################################################################################################################
+
 
 def xbox():
   def threadxbox():
@@ -1695,8 +2222,6 @@ def xbox():
   t.start()
 
 
-
-  
 def ChgDis(val):
   curSpd = int(incrementEntryField.get())
   if curSpd >=100 and val == 0:
@@ -1737,7 +2262,7 @@ def ChgSpd(val):
     curSpd = 5  
   speedEntryField.delete(0, 'end')    
   speedEntryField.insert(0,str(curSpd))  
- 
+
 def J1jogNeg(value):
   global xboxUse
   global J1AngCur
@@ -2593,10 +3118,6 @@ def LiveJointJog(value):
   ser.read()
 
 
-
-
-
-
 def LiveCarJog(value):
   global xboxUse
   almStatusLab.config(text="SYSTEM READY",  style="OK.TLabel")
@@ -2628,8 +3149,6 @@ def LiveCarJog(value):
   time.sleep(.1)
   ser.read()
 
-
-  
 
 def LiveToolJog(value):
   global xboxUse
@@ -2823,7 +3342,6 @@ def J8jogPos(value):
     displayPosition(response) 
 
 
-
 def J9jogNeg(value):
   global xboxUse
   checkSpeedVals()
@@ -2895,7 +3413,6 @@ def J9jogPos(value):
     ErrorHandler(response)    
   else:
     displayPosition(response)     
-    
 
 
 def XjogNeg(value):
@@ -3403,8 +3920,7 @@ def RzjogPos(value):
   else:
     displayPosition(response)
 
-   
-  
+
 def TXjogNeg(value):
   global xboxUse
   checkSpeedVals()
@@ -3841,11 +4357,9 @@ def TRzjogPos(value):
     displayPosition(response)
 
 
-  
-  
-##############################################################################################################################################################  
+##############################################################################################################################################################
 ### TEACH DEFS ################################################################################################################################ TEACH DEFS ###
-##############################################################################################################################################################  
+##############################################################################################################################################################
 
 def teachInsertBelSelected():
   global XcurPos
@@ -4001,13 +4515,10 @@ def teachReplaceSelected():
   teachInsertBelSelected()
 
 
-
- 
-
-############################################################################################################################################################## 
+##############################################################################################################################################################
 ### PROGRAM FUNCTION DEFS ########################################################################################################## PROGRAM FUNCTION DEFS ###
-############################################################################################################################################################## 
-  
+##############################################################################################################################################################
+
 def deleteitem():
   selRow = tab1.progView.curselection()[0]
   selection = tab1.progView.curselection()  
@@ -4015,7 +4526,7 @@ def deleteitem():
   tab1.progView.select_set(selRow)  
   value=tab1.progView.get(0,END)
   pickle.dump(value,open(ProgEntryField.get(),"wb"))  
-  
+
 def manInsItem():
   try:
     selRow = tab1.progView.curselection()[0]
@@ -4033,7 +4544,7 @@ def manInsItem():
   tab1.progView.itemconfig(selRow, {'fg': 'darkgreen'})
   value=tab1.progView.get(0,END)
   pickle.dump(value,open(ProgEntryField.get(),"wb"))
-  
+
 def manReplItem():
   #selRow = curRowEntryField.get()
   selRow = tab1.progView.curselection()[0]
@@ -4044,7 +4555,7 @@ def manReplItem():
   tab1.progView.itemconfig(selRow, {'fg': 'darkgreen'})  
   value=tab1.progView.get(0,END)
   pickle.dump(value,open(ProgEntryField.get(),"wb"))
-  
+
 def waitTime():
   try:
     selRow = tab1.progView.curselection()[0]
@@ -4159,7 +4670,7 @@ def jumpTab():
   tab1.progView.select_set(selRow)
   pickle.dump(value,open(ProgEntryField.get(),"wb"))
   tabNumEntryField.delete(0, 'end')
- 
+
 def cameraOn():
   try:
     selRow = tab1.progView.curselection()[0]
@@ -4189,7 +4700,7 @@ def cameraOff():
   tab1.progView.selection_clear(0, END)
   tab1.progView.select_set(selRow)
   pickle.dump(value,open(ProgEntryField.get(),"wb"))  
-  
+
 def IfOnjumpTab():
   try:
     selRow = tab1.progView.curselection()[0]
@@ -4368,7 +4879,7 @@ def insertRegister():
   tab1.progView.select_set(selRow)
   pickle.dump(value,open(ProgEntryField.get(),"wb"))
   tabNumEntryField.delete(0, 'end')
-  
+
 def storPos():
   try:
     selRow = tab1.progView.curselection()[0]
@@ -4387,7 +4898,7 @@ def storPos():
   tab1.progView.select_set(selRow)
   pickle.dump(value,open(ProgEntryField.get(),"wb"))
   tabNumEntryField.delete(0, 'end')
-  
+
 def insCalibrate():  
   try:
     selRow = tab1.progView.curselection()[0]
@@ -4408,7 +4919,7 @@ def progViewselect(e):
   selRow = tab1.progView.curselection()[0]
   curRowEntryField.delete(0, 'end')
   curRowEntryField.insert(0,selRow)
- 
+
 def getSel():
   selRow = tab1.progView.curselection()[0]
   tab1.progView.see(selRow+2)
@@ -4416,7 +4927,7 @@ def getSel():
   command=tab1.progView.get(data[0])
   manEntryField.delete(0, 'end')
   manEntryField.insert(0, command)  
-  
+
 def Servo0on():
   savePosData() 
   servoPos = servo0onEntryField.get()
@@ -4455,7 +4966,7 @@ def Servo1off():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read()
- 
+
 
 def Servo2on():
   savePosData() 
@@ -4510,7 +5021,7 @@ def DO1off():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read() 
- 
+
 
 def DO2on():
   outputNum = DO2onEntryField.get()
@@ -4519,7 +5030,7 @@ def DO2on():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read()
- 
+
 
 def DO2off():
   outputNum = DO2offEntryField.get()
@@ -4546,7 +5057,7 @@ def DO3off():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read() 
- 
+
 
 def DO4on():
   outputNum = DO4onEntryField.get()
@@ -4555,7 +5066,7 @@ def DO4on():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read()
- 
+
 
 def DO4off():
   outputNum = DO4offEntryField.get()
@@ -4582,7 +5093,7 @@ def DO5off():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read() 
- 
+
 
 def DO6on():
   outputNum = DO6onEntryField.get()
@@ -4591,7 +5102,7 @@ def DO6on():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read()
- 
+
 
 def DO6off():
   outputNum = DO6offEntryField.get()
@@ -4600,7 +5111,7 @@ def DO6off():
   ser2.flushInput()
   time.sleep(.2)
   ser2.read() 
-  
+
 def TestString():
   message = testSendEntryField.get()
   command = "TM"+message+"\n"
@@ -4613,7 +5124,7 @@ def TestString():
 
 def ClearTestString():
   testRecEntryField.delete(0, 'end')
-  
+
 def CalcLinDist(X2,Y2,Z2):
   global XcurPos
   global YcurPos
@@ -4645,12 +5156,8 @@ def CalcLinWayPt(CX,CY,CZ,curWayPt,):
   global YcurPos
   global ZcurPos
 
- 
 
-
-	
-	
-##############################################################################################################################################################	
+##############################################################################################################################################################
 ### CALIBRATION & SAVE DEFS ###################################################################################################### CALIBRATION & SAVE DEFS ###
 ##############################################################################################################################################################	
 
@@ -4887,7 +5394,6 @@ def calRobotJ9():
   tab6.ElogView.insert(END, Curtime+" - "+message)
   value=tab6.ElogView.get(0,END)
   pickle.dump(value,open("ErrorLog","wb"))             
-	
 
 
 def calRobotMid():
@@ -5162,7 +5668,7 @@ def displayPosition(response):
       pickle.dump(value,open("ErrorLog","wb"))          
       almStatusLab.config(text=message, style="Warn.TLabel")
       almStatusLab2.config(text=message, style="Warn.TLabel")
-  
+
 
 def SaveAndApplyCalibration():
   global J1AngCur
@@ -5450,7 +5956,6 @@ def checkSpeedVals():
     ACCrampField.insert(0,"50")
 
 
-
 def ErrorHandler(response):
   Curtime = datetime.datetime.now().strftime("%B %d %Y - %I:%M%p")
   cmdRecEntryField.delete(0, 'end')
@@ -5598,13 +6103,11 @@ def ErrorHandler(response):
     pickle.dump(value,open("ErrorLog","wb"))
     almStatusLab.config(text=message, style="Alarm.TLabel")
     almStatusLab2.config(text=message, style="Alarm.TLabel")
-      
-	
-	
+
 
 ###VISION DEFS###################################################################
-#################################################################################	
- 
+#################################################################################
+
 def testvis():  
   visprog = visoptions.get()
   if(visprog[:]== "Openvision"):
@@ -5613,8 +6116,7 @@ def testvis():
     roborealm175()
   if(visprog[:]== "x,y,r"):
     xyr()	
-	
-	
+
 
 def openvision():
   global Xpos
@@ -5658,10 +6160,8 @@ def openvision():
   SP_1_E1_EntryField.insert(0,Xpos) 
   SP_1_E2_EntryField.delete(0, 'end')
   SP_1_E2_EntryField.insert(0,Ypos) 
- 
 
 
-  
 def roborealm175():
   global Xpos
   global Ypos
@@ -5705,7 +6205,6 @@ def roborealm175():
   SP_1_E1_EntryField.insert(0,Xpos) 
   SP_1_E2_EntryField.delete(0, 'end')
   SP_1_E2_EntryField.insert(0,Ypos) 
- 
 
 
 def xyr():
@@ -5757,8 +6256,6 @@ def xyr():
   SP_1_E3_EntryField.delete(0, 'end')
   SP_1_E3_EntryField.insert(0,r)      
 
-    
-  
 
 def viscalc():
   global xMMpos
@@ -5789,9 +6286,6 @@ def viscalc():
   YMpos = float(YMrange) * float(YPratio)
   yMMpos = float(VisOrigYmm) + YMpos
   return (xMMpos,yMMpos)
-
-
-
 
 
 # Define function to show frame
@@ -5830,7 +6324,7 @@ def stop_vid():
     if cap:
         cap.release()
 
-#vismenu.size
+# vismenu.size
 
 def take_pic():
   global selectedCam
@@ -5962,9 +6456,6 @@ def mask_pic():
   filename = 'curImage.jpg'
   cv2.imwrite(filename, cv2image)
 
-  
-
-
 
 def mask_crop(event, x, y, flags, param):
     global x_start, y_start, x_end, y_end, cropping
@@ -6042,7 +6533,6 @@ def mask_crop(event, x, y, flags, param):
         cv2.destroyAllWindows()
 
 
-
 def selectMask():
   global oriImage
   global button_down
@@ -6056,7 +6546,6 @@ def selectMask():
   cv2.namedWindow("image")
   cv2.setMouseCallback("image", mask_crop)
   cv2.imshow("image", image)
-
 
 
 def mouse_crop(event, x, y, flags, param):
@@ -9624,7 +10113,7 @@ AR3 and AR4 are registered trademarks of Annin Robotics\n\
 Copyright © 2022 by Annin Robotics. All Rights Reserved"
 
 
-tkinter.messagebox.showwarning("AR4 License / Copyright notice", msg)
+# tkinter.messagebox.showwarning("AR4 License / Copyright notice", msg)
 xboxUse = 0
 
 
