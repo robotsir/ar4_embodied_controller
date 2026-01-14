@@ -95,19 +95,21 @@ root.geometry('1536x792+0+0')
 root.runTrue = 0
 
 def on_closing():
-    if messagebox.askokcancel("Close Program", "Do you want to quit?"):
-      try:
-        command = "CL"
-        ser.write(command.encode())
-      except:
-        print ("foo")
+    #if messagebox.askokcancel("Close Program", "Do you want to quit?"):
+    global ser
+    global ser2
+    print("closing window")
+    try:
+      #command = "CL"
+      #ser.write(command.encode())
       ser.close()
-      root.destroy()
+      ser2.close()
+    except:
+      print ("error closing serial ports, quit")
+    root.destroy()
 
-#root.wm_protocol("WM_DELETE_WINDOW", on_closing)
+root.wm_protocol("WM_DELETE_WINDOW", on_closing)
 
-
- 
 
 global JogStepsStat
 JogStepsStat = IntVar()
