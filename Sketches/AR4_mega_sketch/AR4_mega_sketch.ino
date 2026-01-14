@@ -1,4 +1,4 @@
-/*  AR4 Annin Robot Control Software Arduino Mega sketch
+/*  AR3 Annin Robot Control Software Arduino Mega 2560 sketch
     Copyright (c) 2022, Chris Annin
     All rights reserved.
 
@@ -54,6 +54,9 @@ Servo servo5;
 Servo servo6;
 Servo servo7;
 
+//set gripper servo limits in microseconds
+const int gripperMin = 780;
+const int gripperMax = 1820;
 
 const int Input0 = 0;
 const int Input1 = 1;
@@ -85,21 +88,22 @@ const int Input26 = 26;
 const int Input27 = 27;
 
 
+//28~35 for the relay
+const int ch0 = 28;
+const int ch1 = 29;
+const int ch2 = 30;
+const int ch3 = 31;
+const int ch4 = 32;
+const int ch5 = 33;
+const int ch6 = 34;
+const int ch7 = 35;
 
-const int Output28 = 28;
-const int Output29 = 29;
-const int Output30 = 30;
-const int Output31 = 31;
-const int Output32 = 32;
-const int Output33 = 33;
-const int Output34 = 34;
-const int Output35 = 35;
-const int Output36 = 36;
-const int Output37 = 37;
-const int Output38 = 38;
-const int Output39 = 39;
-const int Output40 = 40;
-const int Output41 = 41;
+const int stepPin1 = 36;//stepper motor 1, move wok up/down
+const int dirPin1 = 37;//stepper motor 1, move wok up/down
+const int stepPin2 = 38;//stepper motor 2, yaw 
+const int dirPin2 = 39;//stepper motor 2, yaw 
+const int stepPin3 = 40;//stepper motor 3, roll 
+const int dirPin3 = 41;//stepper motor 3, roll 
 const int Output42 = 42;
 const int Output43 = 43;
 const int Output44 = 44;
@@ -113,6 +117,13 @@ const int Output51 = 51;
 const int Output52 = 52;
 const int Output53 = 53;
 
+//global variables
+const float microStep = 2;
+const int delayHigh = 500/microStep; //400 microseconds is the minimal I can set for 1 microstep setting TB6600
+const int delayLow = 500/microStep; //400 microseconds is the minimal I can set for 1 microstep setting TB6600
+const int delayHighMS = 30; //delay in milliseconds, for the rotation movement, use this longer delay to slow down
+const int delayLowMS = 30; 
+const int delayTimeMS = 1000;
 
 void setup() {
   // run once:
@@ -166,20 +177,23 @@ void setup() {
   pinMode(Input26, INPUT_PULLUP);
   pinMode(Input27, INPUT_PULLUP);
 
-  pinMode(Output28, OUTPUT);
-  pinMode(Output29, OUTPUT);
-  pinMode(Output30, OUTPUT);
-  pinMode(Output31, OUTPUT);
-  pinMode(Output32, OUTPUT);
-  pinMode(Output33, OUTPUT);
-  pinMode(Output34, OUTPUT);
-  pinMode(Output35, OUTPUT);
-  pinMode(Output36, OUTPUT);
-  pinMode(Output37, OUTPUT);
-  pinMode(Output38, OUTPUT);
-  pinMode(Output39, OUTPUT);
-  pinMode(Output40, OUTPUT);
-  pinMode(Output41, OUTPUT);
+  //relay
+  pinMode(ch0, OUTPUT);
+  pinMode(ch1, OUTPUT);
+  pinMode(ch2, OUTPUT);
+  pinMode(ch3, OUTPUT);
+  pinMode(ch4, OUTPUT);
+  pinMode(ch5, OUTPUT);
+  pinMode(ch6, OUTPUT);
+  pinMode(ch7, OUTPUT);
+
+  //motors
+  pinMode(stepPin1, OUTPUT);
+  pinMode(dirPin1, OUTPUT);
+  pinMode(stepPin2, OUTPUT);
+  pinMode(dirPin2, OUTPUT);
+  pinMode(stepPin3, OUTPUT);
+  pinMode(dirPin3, OUTPUT);
   pinMode(Output42, OUTPUT);
   pinMode(Output43, OUTPUT);
   pinMode(Output44, OUTPUT);
@@ -193,26 +207,35 @@ void setup() {
   pinMode(Output52, OUTPUT);
   pinMode(Output53, OUTPUT);
 
-  servo0.attach(A0);
-  servo1.attach(A1);
-  servo2.attach(A2);
-  servo3.attach(A3);
-  servo4.attach(A4);
+  servo0.attach(A0, gripperMin, gripperMax);
+  //below only works for continuous servo, avoid twitching at power up, not working
+  //it seems continuous servos always twitch on power up
+  //servo1.attach(A1);
+  //servo1.writeMicroseconds(1500);//turn servo off
+  //servo1.detach();
+  //servo2.attach(A2);
+  //servo2.writeMicroseconds(1500);//turn servo off
+  //servo2.detach();
+  //servo3.attach(A3);
+  //servo3.writeMicroseconds(1500);//turn servo off
+  //servo3.detach();
+  //servo4.attach(A4);
+  //servo4.writeMicroseconds(1500);//turn servo off
+  //servo4.detach();
+  
   servo5.attach(A5);
   servo6.attach(A6);
   servo7.attach(A7);
 
-  digitalWrite(Output28, HIGH);
-  digitalWrite(Output29, HIGH);
-  digitalWrite(Output30, HIGH);
-  digitalWrite(Output31, HIGH);
-  digitalWrite(Output32, HIGH);
-  digitalWrite(Output33, HIGH);
-  digitalWrite(Output34, HIGH);
-  digitalWrite(Output35, HIGH);
-
-
-
+  // HIGH will disconnect switch
+  digitalWrite(ch0, HIGH);
+  digitalWrite(ch1, HIGH);
+  digitalWrite(ch2, HIGH);
+  digitalWrite(ch3, HIGH);
+  digitalWrite(ch4, HIGH);
+  digitalWrite(ch5, HIGH);
+  digitalWrite(ch6, HIGH);
+  digitalWrite(ch7, HIGH);
 }
 
 void loop() {
@@ -237,23 +260,90 @@ void loop() {
         int servoPOS = inData.substring(POSstart + 1).toInt();
         if (servoNum == 0)
         {
-          servo0.write(servoPOS);
+          //constrain the input to the gripper openning range 0~110mm
+          servoPOS = constrain(servoPOS, 0, 110);
+          //map the input to the servo range
+          servoPOS = map(servoPOS, 0, 110, gripperMin, gripperMax);
+          //constrain again to make sure it's within the servo range
+          servoPOS = constrain(servoPOS, gripperMin, gripperMax);
+          servo0.writeMicroseconds(servoPOS);
+          //servo0.write(servoPOS);
         }
         if (servoNum == 1)
         {
-          servo1.write(servoPOS);
+          //this is a continuous servo
+          if(servoPOS<80)
+          {
+            servo1.attach(A1);
+            servo1.writeMicroseconds(1000);
+          }
+          else if(servoPOS>100)
+          {
+            servo1.attach(A1);
+            servo1.writeMicroseconds(2000);
+          }
+          else
+          {
+            servo1.writeMicroseconds(1500);//turn servo off
+            servo1.detach();
+          }
         }
         if (servoNum == 2)
         {
-          servo2.write(servoPOS);
+          //this is a continuous servo
+          if(servoPOS<80)
+          {
+            servo2.attach(A2);
+            servo2.writeMicroseconds(1000);
+          }
+          else if(servoPOS>100)
+          {
+            servo2.attach(A2);
+            servo2.writeMicroseconds(2000);
+          }
+          else
+          {
+            servo2.writeMicroseconds(1500);//turn servo off
+            servo2.detach();
+          }
         }
         if (servoNum == 3)
         {
-          servo3.write(servoPOS);
+          //this is a continuous servo
+          if(servoPOS<80)
+          {
+            servo3.attach(A3);
+            servo3.writeMicroseconds(1000);
+          }
+          else if(servoPOS>100)
+          {
+            servo3.attach(A3);
+            servo3.writeMicroseconds(2000);
+          }
+          else
+          {
+            servo3.writeMicroseconds(1500);//turn servo off
+            servo3.detach();
+          }
         }
         if (servoNum == 4)
         {
-          servo4.write(servoPOS);
+          //this is a continuous servo
+          if(servoPOS<80)
+          {
+            servo4.attach(A4);
+            servo4.writeMicroseconds(1000);
+          }
+          else if(servoPOS>100)
+          {
+            servo4.attach(A4);
+            servo4.writeMicroseconds(2000);
+          }
+          else
+          {
+            servo4.writeMicroseconds(1500);//turn servo off
+            servo4.detach();
+          }
         }
         if (servoNum == 5)
         {
@@ -267,31 +357,295 @@ void loop() {
         {
           servo7.write(servoPOS);
         }
-        Serial.print("Servo Done");
+        Serial.println("Servo Done");
       }
+      //control continuous servos
+      if (function == "SC")
+      {
+        int SVstart = inData.indexOf('C');
+        int timeStart = inData.indexOf('T');
+        int servoNum = inData.substring(SVstart + 1, timeStart).toInt();
+        int servoTime = inData.substring(timeStart + 1).toInt();
+        if (servoNum == 0)
+        {
+          //do nothing
+        }
+        if (servoNum == 1)
+        {
+          servo1.attach(A1);
+          servo1.writeMicroseconds(1000);
+          delay(servoTime);
+          servo1.writeMicroseconds(1500);//turn servo off
+          servo1.detach();
+        }
+        if (servoNum == 2)
+        {
+          servo2.attach(A2);
+          servo2.writeMicroseconds(1000);
+          delay(servoTime);
+          servo2.writeMicroseconds(1500);//turn servo off
+          servo2.detach();
+        }
+        if (servoNum == 3)
+        {
+          servo3.attach(A3);
+          servo3.writeMicroseconds(1000);
+          delay(servoTime);
+          servo3.writeMicroseconds(1500);//turn servo off
+          servo3.detach();
+        }
+        if (servoNum == 4)
+        {
+          servo4.attach(A4);
+          servo4.writeMicroseconds(1000);
+          delay(servoTime);
+          servo4.writeMicroseconds(1500);//turn servo off
+          servo4.detach();
+        }
+        if (servoNum == 5)
+        {
+        }
+        if (servoNum == 6)
+        {
+        }
+        if (servoNum == 7)
+        {
+        }
+        Serial.println("Servo Continuous Done");
+      }
+      //control stepper motors
+      else if (function == "ST")
+      {
+        int STstart = inData.indexOf('T');
+        int POSstart = inData.indexOf('P');
+        int limitSwitchstart = inData.indexOf("LS");
+        int stepperNum = inData.substring(STstart + 1, POSstart).toInt();
+        int stepperPos = inData.substring(POSstart + 1, limitSwitchstart).toInt();
+        int checkLS = inData.substring(limitSwitchstart + 2).toInt();
 
+        //Serial.println("received data: " + inData);
+        //Serial.println("checkLS: " + String(checkLS));
+       
+        //stepper number 1, move wok up/down
+        if (stepperNum == 1)
+        {        
+          if(stepperPos > 0)
+          {
+            digitalWrite(dirPin1,HIGH); //Enables the motor to move in a particular direction, HIGH is up
+          }
+          else
+          {
+            digitalWrite(dirPin1,LOW); //Enables the motor to move in a particular direction, LOW is down
+          }
+  
+          stepperPos = abs(stepperPos); //in mm
+          //when microstep is 1:
+          //angle/step is 1.8 degrees, lead screw pitch is 4mm
+          //Makes 200 pulses for making one full cycle rotation
 
+          // map degrees to steps
+          //int steps = map(stepperPos, 0, 360, 0, 480);
+
+          for(long x = 0; x < 200 * microStep / 4 * stepperPos; x++) {
+            digitalWrite(stepPin1,HIGH); 
+            delayMicroseconds(delayHigh); 
+            digitalWrite(stepPin1,LOW); 
+            delayMicroseconds(delayLow); 
+          }
+          
+//          for(int x = 0; x < steps; x++) 
+//          {
+//            //check the limit switch
+//            if (digitalRead(Input2) == LOW && checkLS == 1)
+//            {
+//              break;
+//            }
+//
+//            //in this case, only check the switch during the second half of the moving range
+//            //so the stepper can still turn when initally the switch is already triggered
+//            if (digitalRead(Input2) == LOW && checkLS == 2 && x > steps/2)
+//            {
+//              break;
+//            }
+//            
+//            digitalWrite(stepPin,HIGH);
+//            delay(delayHigh);
+//            digitalWrite(stepPin,LOW);
+//            delay(delayLow);
+//          }
+  
+          digitalWrite(stepPin1,HIGH);//why? to make the stepper hold the torque?
+        }
+        //stepper number 2, yaw, rotate toward to the front of the table, or toward the back
+        else if (stepperNum == 2)
+        {        
+          if(stepperPos > 0)
+          {
+            digitalWrite(dirPin2,HIGH); //HIGH: turn towards the front of the table
+          }
+          else
+          {
+            digitalWrite(dirPin2,LOW); //LOW: turn towards the back of the table
+          }
+  
+          stepperPos = abs(stepperPos); //in degrees
+          //when microstep is 1:
+          //angle/step is 1.8 degrees
+          //Makes 200 pulses for making one full cycle rotation
+
+          // map degrees to steps
+          //48/20=2.4 gear ratio
+          int steps = map(stepperPos, 0, 360, 0, 200 * microStep * 2.4);
+          int accSteps = steps / 10;
+          int delayMS2 = 20;
+          
+          for(long x = 0; x < steps; x++) {
+            if(x < accSteps)
+            {
+              delayMS2 = 40;
+            }
+            else if(x > steps - accSteps)
+            {
+              delayMS2 = 40;
+            }
+            else
+            {
+              delayMS2 = 20;
+            }
+
+            digitalWrite(stepPin2,HIGH); 
+            delay(delayMS2); 
+            digitalWrite(stepPin2,LOW); 
+            delay(delayMS2); 
+          }          
+ 
+          digitalWrite(stepPin2,HIGH);//why? to make the stepper hold the torque?
+        }
+        //stepper number 3, roll, rotate toward to the front of the table, or toward the back
+        else if (stepperNum == 3)
+        {        
+          if(stepperPos > 0)
+          {
+            digitalWrite(dirPin3,HIGH); //toward the front of the table
+          }
+          else
+          {
+            digitalWrite(dirPin3,LOW); //toward the back of the table
+          }
+  
+          stepperPos = abs(stepperPos); //in degrees
+          //when microstep is 1:
+          //angle/step is 1.8 degrees, internal gear ratio is 19:1
+          //Makes 200x19 pulses for making one full cycle rotation
+
+          // map degrees to steps
+          //48/20=2.4 gear ratio
+          //18240<32767, so int is OK here
+          int steps = map(stepperPos, 0, 360, 0, 200 * microStep * 2.4 * 19);
+
+          for(long x = 0; x < steps; x++) {
+            digitalWrite(stepPin3,HIGH); 
+            delay(1); 
+            digitalWrite(stepPin3,LOW); 
+            delay(1); 
+          }          
+ 
+          digitalWrite(stepPin3,HIGH);//why? to make the stepper hold the torque?
+        }
+        //don't do anything for the rest of the motor index
+        else
+        {}
+        
+        Serial.println("Stepper Done");
+      }
+      
+      //control DC motors
+      else if (function == "DC")
+      {
+        Serial.print("DC motor Done");
+      }
+      
+      //control 8 channel relay
+      else if (function == "SW")
+      {
+        int SWstart = inData.indexOf('W');
+        int POSstart = inData.indexOf('P');
+        int swChannel = inData.substring(SWstart + 1, POSstart).toInt();
+        int swBool = inData.substring(POSstart + 1).toInt();
+        int portNum = ch0;
+        
+        //map swChannel to a pin
+        if(swChannel == 0)
+        {
+          portNum = ch0;
+        }
+        else if(swChannel == 1)
+        {
+          portNum = ch1;
+        }
+        else if(swChannel == 2)
+        {
+          portNum = ch2;
+        }
+        else if(swChannel == 3)
+        {
+          portNum = ch3;
+        }
+        else if(swChannel == 4)
+        {
+          portNum = ch4;
+        }
+        else if(swChannel == 5)
+        {
+          portNum = ch5;
+        }
+        else if(swChannel == 6)
+        {
+          portNum = ch6;
+        }
+        else if(swChannel == 7)
+        {
+          portNum = ch7;
+        }
+
+        //check control mode
+        if(swBool == 1)
+        {
+          digitalWrite(portNum, LOW);
+        }
+        else if(swBool == 0)
+        {
+          digitalWrite(portNum, HIGH);
+        }
+        else if(swBool >= 2)
+        {
+          //flip switch on, delay swBool ms, then flip switch off
+          digitalWrite(portNum, LOW);
+          delay(swBool);
+          digitalWrite(portNum, HIGH);
+        }
+
+        Serial.println("Relay control Done");
+      }
       //-----COMMAND IF INPUT THEN JUMP---------------------------------------------------
       //-----------------------------------------------------------------------
-	  if (function == "JF")
+      else if (function == "JF")
       {
         int IJstart = inData.indexOf('X');
         int IJTabstart = inData.indexOf('T');
         int IJInputNum = inData.substring(IJstart + 1, IJTabstart).toInt();
         if (digitalRead(IJInputNum) == HIGH)
         {
-          delay(5);
           Serial.println("T");
         }
         if (digitalRead(IJInputNum) == LOW)
         {
-          delay(5);
           Serial.println("F");
         }
       }
       //-----COMMAND SET OUTPUT ON---------------------------------------------------
       //-----------------------------------------------------------------------
-      if (function == "ON")
+      else if (function == "ON")
       {
         int ONstart = inData.indexOf('X');
         int outputNum = inData.substring(ONstart + 1).toInt();
@@ -300,7 +654,7 @@ void loop() {
       }
       //-----COMMAND SET OUTPUT OFF---------------------------------------------------
       //-----------------------------------------------------------------------
-      if (function == "OF")
+      else if (function == "OF")
       {
         int ONstart = inData.indexOf('X');
         int outputNum = inData.substring(ONstart + 1).toInt();
@@ -309,7 +663,7 @@ void loop() {
       }
       //-----COMMAND TO WAIT INPUT ON---------------------------------------------------
       //-----------------------------------------------------------------------
-      if (function == "WI")
+      else if (function == "WI")
       {
         int WIstart = inData.indexOf('N');
         int InputNum = inData.substring(WIstart + 1).toInt();
@@ -320,7 +674,7 @@ void loop() {
       }
       //-----COMMAND TO WAIT INPUT OFF---------------------------------------------------
       //-----------------------------------------------------------------------
-      if (function == "WO")
+      else if (function == "WO")
       {
         int WIstart = inData.indexOf('N');
         int InputNum = inData.substring(WIstart + 1).toInt();
@@ -334,19 +688,13 @@ void loop() {
       }
       //-----COMMAND ECHO TEST MESSAGE---------------------------------------------------
       //-----------------------------------------------------------------------
-      if (function == "TM")
+      else if (function == "TM")
       {
         String echo = inData.substring(2);
         Serial.println(echo);
       }
 
-
-
-
-      else
-      {
-        inData = ""; // Clear recieved buffer
-      }
+      inData = ""; // Clear recieved buffer
     }
   }
 }
