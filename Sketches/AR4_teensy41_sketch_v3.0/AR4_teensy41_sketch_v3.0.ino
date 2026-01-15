@@ -323,20 +323,6 @@ float rndSpeed;
 bool splineTrue;
 bool splineEndReceived;
 
-
-
-//DENAVIT HARTENBERG PARAMETERS
-
-// float DHparams[6][4] = {
-//   {    0,      0,  169.77,      0  },
-//   {  -90,    -90,       0,   64.2  },
-//   {    0,      0,       0,    305  },
-//   {    0,    -90,  222.63,      0  },
-//   {    0,     90,       0,      0  },
-//   {  180,    -90,   36.25,      0  }
-// };
-
-
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //CALCULATE POSITIONS
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -376,25 +362,6 @@ void updatePos() {
   J7_pos = (J7StepM - J7zeroStep) / J7StepDeg;
   J8_pos = (J8StepM - J8zeroStep) / J8StepDeg;
   J9_pos = (J9StepM - J9zeroStep) / J9StepDeg;
-
-  //SolveFowardKinematic();
-}
-
-
-void syncStepsToEncoders() {
-  long e1 = J1encPos.read();
-  long e2 = J2encPos.read();
-  long e3 = J3encPos.read();
-  long e4 = J4encPos.read();
-  long e5 = J5encPos.read();
-  long e6 = J6encPos.read();
-
-  J1StepM = e1 / J1encMult;
-  J2StepM = e2 / J2encMult;
-  J3StepM = e3 / J3encMult;
-  J4StepM = e4 / J4encMult;
-  J5StepM = e5 / J5encMult;
-  J6StepM = e6 / J6encMult;
 }
 
 void syncRobotPosFromEncoders () {
@@ -425,8 +392,6 @@ void syncRobotPosFromEncoders () {
   J7_pos = (J7StepM - J7zeroStep) / J7StepDeg;
   J8_pos = (J8StepM - J8zeroStep) / J8StepDeg;
   J9_pos = (J9StepM - J9zeroStep) / J9StepDeg;
-
-  //SolveFowardKinematic();
 }
 
 
@@ -446,17 +411,11 @@ void correctRobotPos () {
   JangleIn[4] = (J5StepM - J5zeroStep) / J5StepDeg;
   JangleIn[5] = (J6StepM - J6zeroStep) / J6StepDeg;
 
-
-  //SolveFowardKinematic();
-
   String sendPos = "A" + String(JangleIn[0], 3) + "B" + String(JangleIn[1], 3) + "C" + String(JangleIn[2], 3) + "D" + String(JangleIn[3], 3) + "E" + String(JangleIn[4], 3) + "F" + String(JangleIn[5], 3) + "G" + String(xyzuvw_Out[0], 3) + "H" + String(xyzuvw_Out[1], 3) + "I" + String(xyzuvw_Out[2], 3) + "J" + String(xyzuvw_Out[3], 3) + "K" + String(xyzuvw_Out[4], 3) + "L" + String(xyzuvw_Out[5], 3) + "M" + speedViolation + "N" + debug + "O" + flag + "P" + J7_pos + "Q" + J8_pos + "R" + J9_pos;
   delay(5);
   Serial.println(sendPos);
   speedViolation = "0";
   flag = "";
-
-
-
 }
 
 
@@ -3524,7 +3483,7 @@ if (estop_latched) {
 
 
       resetEncoders();
-      //syncStepsToEncoders(); //Updates start position to match reality.
+
       driveMotorsJ(abs(J1stepDif), abs(J2stepDif), abs(J3stepDif), abs(J4stepDif), abs(J5stepDif), abs(J6stepDif), abs(J7stepDif), abs(J8stepDif), abs(J9stepDif), J1dir, J2dir, J3dir, J4dir, J5dir, J6dir, J7dir, J8dir, J9dir, SpeedType, SpeedVal, ACCspd, DCCspd, ACCramp);
       checkEncoders();
       sendRobotPos();
@@ -4407,7 +4366,6 @@ if (estop_latched) {
         //send move command if no axis limit error
         if (TotalAxisFault == 0 && KinematicError == 0) {
           resetEncoders();
-          //syncStepsToEncoders(); // Updates start position to match reality.
 
           driveMotorsJ(abs(J1stepDif), abs(J2stepDif), abs(J3stepDif), abs(J4stepDif), abs(J5stepDif), abs(J6stepDif), abs(J7stepDif), abs(J8stepDif), abs(J9stepDif), J1dir, J2dir, J3dir, J4dir, J5dir, J6dir, J7dir, J8dir, J9dir, SpeedType, SpeedVal, ACCspd, DCCspd, ACCramp);
           //checkEncoders();
@@ -4707,7 +4665,7 @@ if (estop_latched) {
       //send move command if no axis limit error
       if (TotalAxisFault == 0 && KinematicError == 0) {
         resetEncoders();
-        //syncStepsToEncoders(); // Updates start position to match reality.
+     
         driveMotorsJ(abs(J1stepDif), abs(J2stepDif), abs(J3stepDif), abs(J4stepDif), abs(J5stepDif), abs(J6stepDif), abs(J7stepDif), abs(J8stepDif), abs(J9stepDif), J1dir, J2dir, J3dir, J4dir, J5dir, J6dir, J7dir, J8dir, J9dir, SpeedType, SpeedVal, ACCspd, DCCspd, ACCramp);
         checkEncoders();
         sendRobotPos();

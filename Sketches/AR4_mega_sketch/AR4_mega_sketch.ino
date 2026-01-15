@@ -267,7 +267,6 @@ void loop() {
           //constrain again to make sure it's within the servo range
           servoPOS = constrain(servoPOS, gripperMin, gripperMax);
           servo0.writeMicroseconds(servoPOS);
-          //servo0.write(servoPOS);
         }
         if (servoNum == 1)
         {
@@ -422,9 +421,6 @@ void loop() {
         int stepperNum = inData.substring(STstart + 1, POSstart).toInt();
         int stepperPos = inData.substring(POSstart + 1, limitSwitchstart).toInt();
         int checkLS = inData.substring(limitSwitchstart + 2).toInt();
-
-        //Serial.println("received data: " + inData);
-        //Serial.println("checkLS: " + String(checkLS));
        
         //stepper number 1, move wok up/down
         if (stepperNum == 1)
@@ -451,28 +447,7 @@ void loop() {
             delayMicroseconds(delayHigh); 
             digitalWrite(stepPin1,LOW); 
             delayMicroseconds(delayLow); 
-          }
-          
-//          for(int x = 0; x < steps; x++) 
-//          {
-//            //check the limit switch
-//            if (digitalRead(Input2) == LOW && checkLS == 1)
-//            {
-//              break;
-//            }
-//
-//            //in this case, only check the switch during the second half of the moving range
-//            //so the stepper can still turn when initally the switch is already triggered
-//            if (digitalRead(Input2) == LOW && checkLS == 2 && x > steps/2)
-//            {
-//              break;
-//            }
-//            
-//            digitalWrite(stepPin,HIGH);
-//            delay(delayHigh);
-//            digitalWrite(stepPin,LOW);
-//            delay(delayLow);
-//          }
+          }      
   
           digitalWrite(stepPin1,HIGH);//why? to make the stepper hold the torque?
         }
@@ -679,8 +654,6 @@ void loop() {
         int WIstart = inData.indexOf('N');
         int InputNum = inData.substring(WIstart + 1).toInt();
 
-        //String InputStr =  String("Input" + InputNum);
-        //uint8_t Input = atoi(InputStr.c_str ());
         while (digitalRead(InputNum) == HIGH) {
           delay(100);
         }
