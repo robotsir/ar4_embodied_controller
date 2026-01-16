@@ -1,6 +1,6 @@
 # 🦾 AR3 Custom Controller for Embodied AI (UMI & Diffusion Policy)
 
-[![Watch the Demo](https://img.youtube.com/vi/qmbZjXXNZu8/hqdefault.jpg)](https://youtu.be/qmbZjXXNZu8)
+[![Watch the Demo](assets/UMI_AR4.gif)](https://youtu.be/DaHaX00mwM8)
 
 ## ⚡ Project Overview
 This is a highly modified fork of the official AR4 software, engineered to bridge modern AI control policies with legacy robotic hardware. 
